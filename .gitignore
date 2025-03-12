@@ -174,7 +174,6 @@ poetry.toml
 pyrightconfig.json
 
 # Data folder
-data/*/
-data/**/
+data/
 !data/.gitkeep
 # End of https://www.toptal.com/developers/gitignore/api/python
