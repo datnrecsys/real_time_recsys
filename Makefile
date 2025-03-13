@@ -10,5 +10,6 @@ infra-up:
 infra-logs:
 	docker compose -f ./compose.yml logs
 
-down:
-	docker compose -f ./compose-postgres.yaml down && docker volume remove hm-scalablerecs_recsys-dwh
+infra-down:
+	docker compose -f ./compose.yml down
+	

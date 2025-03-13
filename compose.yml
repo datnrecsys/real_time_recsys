@@ -1,8 +1,9 @@
 services:
   minio:
     restart: always
-    image: minio/minio@sha256:2c8ac2a6255a2fa7b73a0a3647314c07121432b8ca1ce4ed8bfe31ca8495d7f7
+    image: minio/minio
     container_name: mlflow_s3
+    platform: linux/arm64
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -12,9 +13,11 @@ services:
       - MINIO_ROOT_PASSWORD=${AWS_SECRET_ACCESS_KEY}
     volumes:
       - ./data/mlflow/minio_data:/data
+    networks:
+      - recsys
 
   mlflow_mc:
-    image: minio/mc@sha256:3adae97df95c66b301b25ca7b38a9d7cfbd93b8f0652687331d552cd046dbfc1
+    image: minio/mc
     depends_on:
       - minio
     container_name: mlflow_mc
@@ -31,11 +34,14 @@ services:
       "
     volumes:
       - ./mlflow/wait-for-it.sh:/tmp/wait-for-it.sh
+    networks:
+      - recsys
 
   mlflow_db:
     restart: always
-    image: mysql/mysql-server@sha256:5b40d96b11333570143d98d3a74100fefadb9abb17b27a95dbc9ad33544ec142
+    image: mysql/mysql-server:8.0.23
     container_name: mlflow_db
+    platform: linux/arm64
     ports:
       - "3306:3306"
     environment:
@@ -45,6 +51,8 @@ services:
       - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
     volumes:
       - ./data/mlflow/dbdata:/var/lib/mysql
+    networks:
+      - recsys
 
   mlflow_server:
     restart: always
@@ -69,6 +77,8 @@ services:
         --serve-artifacts
         --host 0.0.0.0
         --port 5000
+    networks:
+      - recsys
 
   kv_store:
     # Redis is limited to 7.2-bookworm due to licencing change
@@ -87,6 +97,8 @@ services:
       timeout: 30s
       retries: 50
       start_period: 30s
+    networks:
+      - recsys
 
   qdrant:
     image: qdrant/qdrant:v1.12.0
@@ -96,6 +108,8 @@ services:
     volumes:
       - ./data/qdrant_storage:/qdrant/storage:z
     restart: always
+    networks:
+      - recsys
 
   dwh:
     container_name: dwh
@@ -115,7 +129,8 @@ services:
       interval: 10s
       retries: 5
       start_period: 5s
-
+    networks:
+      - recsys
 
 networks:
   recsys:
