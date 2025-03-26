@@ -176,4 +176,7 @@ pyrightconfig.json
 # Data folder
 data/
 !data/.gitkeep
+data_for_ai/*
+!data_for_ai/**/
+!data_for_ai/**/.gitkeep
 # End of https://www.toptal.com/developers/gitignore/api/python

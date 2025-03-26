@@ -11,5 +11,5 @@ infra-logs:
 	docker compose -f ./compose.yml logs
 
 infra-down:
-	docker compose -f ./compose.yml down
+	docker compose -f ./compose.yml down -v
 	
