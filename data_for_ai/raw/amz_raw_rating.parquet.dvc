@@ -1,0 +1,5 @@
+outs:
+- md5: c0445c5408f83ade4bd80a5dd6fc53a9
+  size: 1289025486
+  hash: md5
+  path: amz_raw_rating.parquet

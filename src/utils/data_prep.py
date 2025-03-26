@@ -7,15 +7,15 @@ from tqdm.auto import tqdm
 from scipy.sparse import issparse
 import numpy as np
 
-def parse_dt(df: pd.DataFrame, cols: List[str] = ["t_dat"]) -> pd.DataFrame:
+def parse_dt(df: pd.DataFrame, cols: List[str] = ["timestamp"]) -> pd.DataFrame:
     """Convert specified columns in the DataFrame to datetime format."""
-    return df.assign(**{col: lambda df: pd.to_datetime(df[col].astype(object)) for col in cols})
+    return df.assign(**{col: lambda df: pd.to_datetime(df[col].astype(int), unit = "ms") for col in cols})
 
 
 def handle_dtypes(df: pd.DataFrame) -> pd.DataFrame:
-    """Convert the 'price' column in the DataFrame to float type."""
-    return df.assign(**{"price": lambda df: df["price"].astype(float), 
-                        "article_id": lambda df: df["article_id"].astype(str)})
+    """Convert the 'rating' column in the DataFrame to float type."""
+    return df.assign(**{"rating": lambda df: df["rating"].astype(float), 
+                        "parent_asin": lambda df: df["parent_asin"].astype(str)})
 
 
 def chunk_ingest_decorator(chunk_size: int = 1000) -> Callable:
