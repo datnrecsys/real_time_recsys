@@ -11,5 +11,7 @@ infra-logs:
 	docker compose -f ./compose.yml logs
 
 infra-down:
-	docker compose -f ./compose.yml down
+	docker compose -f ./compose.yml down -v
 	
+clean-raw-data:
+	rm -rf ./data_for_ai/raw/*.parquet

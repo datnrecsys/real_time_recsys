@@ -176,4 +176,9 @@ pyrightconfig.json
 # Data folder
 data/
 !data/.gitkeep
+
+.dvc/config
+.dvc/tmp
+.dvc/cache
+
 # End of https://www.toptal.com/developers/gitignore/api/python

@@ -1,0 +1,5 @@
+outs:
+- md5: 928e374a2f8b1d5a7a04c89782468d2a
+  size: 1336242
+  hash: md5
+  path: amz_holdout_rating.parquet

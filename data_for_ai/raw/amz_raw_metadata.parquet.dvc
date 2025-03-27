@@ -1,0 +1,5 @@
+outs:
+- md5: ce828cd9c95a5f67cca0a56f5eb7bb9a
+  size: 872790200
+  hash: md5
+  path: amz_raw_metadata.parquet
