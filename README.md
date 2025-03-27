@@ -38,5 +38,5 @@
 
 5. Pull data
     ```sh
-    dvc pull
+    poetry run dvc pull
     ```
