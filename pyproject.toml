@@ -38,6 +38,7 @@ dask = {extras = ["complete"], version = "^2025.2.0"}
 papermill = "^2.6.0"
 nbqa = "^1.9.1"
 dvc = {extras = ["s3"], version = "^3.59.1"}
+mlflow = "^2.21.2"
 
 [tool.poetry.group.dev.dependencies]
 jupyterlab = "^4.2.4"

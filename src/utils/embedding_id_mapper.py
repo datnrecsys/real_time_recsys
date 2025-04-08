@@ -1,6 +1,5 @@
 import json
 
-
 class IDMapper:
     def __init__(self):
         self.user_to_index = {}
@@ -56,3 +55,12 @@ class IDMapper:
             self.unknown_user_index = len(self.user_to_index)
             self.unknown_item_index = len(self.item_to_index)
         return self
+    
+    def map_indices(self, df, user_col:str = "user_id", item_col: str = "parent_asin"):
+        df = df.assign(
+            **{
+                "user_indice": df[user_col].map(self.get_user_index),
+                "item_indice": df[item_col].map(self.get_item_index),
+            }
+        )
+        return df
