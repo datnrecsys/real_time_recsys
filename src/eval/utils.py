@@ -76,6 +76,7 @@ def merge_recs_with_target(
     item_col="parent_asin",
     rating_col="rating",
 ):
+    
     return (
         recs_df.pipe(
             lambda df: pd.merge(

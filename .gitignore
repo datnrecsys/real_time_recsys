@@ -180,5 +180,6 @@ data/
 .dvc/config
 .dvc/tmp
 .dvc/cache
+outputs/
 
 # End of https://www.toptal.com/developers/gitignore/api/python

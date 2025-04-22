@@ -36,11 +36,11 @@ def log_ranking_metrics(args, eval_df, min_rel_score: int = 2):
 
     report = Report(
         metrics=[
-            NDCGKMetric(k=args.top_k, min_rel_score= min_rel_score),
-            RecallTopKMetric(k=args.top_K, min_rel_score= min_rel_score),
-            PrecisionTopKMetric(k=args.top_K, min_rel_score= min_rel_score),
-            FBetaTopKMetric(k=args.top_k, min_rel_score= min_rel_score),
-            PersonalizationMetric(k=args.top_k, min_rel_score= min_rel_score),
+            NDCGKMetric(k=args.top_k),
+            RecallTopKMetric(k=args.top_K),
+            PrecisionTopKMetric(k=args.top_K),
+            FBetaTopKMetric(k=args.top_k),
+            PersonalizationMetric(k=args.top_k),
         ],
     )
 
@@ -74,7 +74,7 @@ def log_classification_metrics(
     column_mapping = ColumnMapping(target=target_col, prediction=prediction_col)
     classification_performance_report = Report(
         metrics=[
-            ClassificationPreset(probas_threshold=sigmoid(2)),
+            ClassificationPreset(),
         ]
     )
 
