@@ -4,3 +4,5 @@
 /val_sample_interactions_16407u.parquet
 /train_sample_interactions_16407u_neg.parquet
 /val_sample_interactions_16407u_neg.parquet
+/train_sample_interactions_16407u_neg_seq.parquet
+/val_sample_interactions_16407u_neg_seq.parquet
