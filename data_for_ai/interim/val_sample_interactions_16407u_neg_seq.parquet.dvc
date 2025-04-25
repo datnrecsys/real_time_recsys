@@ -1,0 +1,5 @@
+outs:
+- md5: cfb2ba4dc0921c09635e4497998551c9
+  size: 333206
+  hash: md5
+  path: val_sample_interactions_16407u_neg_seq.parquet
