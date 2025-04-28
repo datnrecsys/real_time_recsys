@@ -112,22 +112,39 @@ class SASRec(nn.Module):
         return logits
 
     def predict(self, user_ids, seq, target_item):
+        # print("DEBUG")
+        # print(seq.shape)
+        # print(target_item.shape)
+        # print(user_ids.shape)
+        
         return self.sigmoid(self.forward(user_ids, seq, target_item))
 
     def recommend(self, users, seqs, k=10):
         self.eval()
-        all_items = torch.arange(1, self.item_num+1, device=seqs.device)
-        
+        all_items = torch.arange(0, self.item_num, device=seqs.device)
         scores = []
         with torch.no_grad():
+            # print(seqs.shape)
+            # print(all_items.shape)
+            # print(users.shape)
+            
             for i in range(len(users)):
-                seq = seqs[i].unsqueeze(0).repeat(self.item_num, 1)
-                items = all_items.unsqueeze(1)
-                user = users[i].unsqueeze(0).repeat(self.item_num, 1)
+                # print(i)
+                seq = seqs[i].unsqueeze(0).repeat(self.item_num, 1)                
+                items = all_items#.unsqueeze(1)
+                user = users[i].repeat(self.item_num, 1).squeeze(1)
+                # print("seq shape",seq.shape)
+                # print(seq)
+                # print("items shape",items.shape)
+                # print("user shape",user.shape)
                 score = self.predict(user, seq, items)
+                # print("score shape",score.shape)
                 scores.append(score)
         
         topk = torch.stack(scores).topk(k)
+        # print(topk.values.shape)
+        # print("DEBUG")
+        
         return {
             'user_ids': users.cpu().numpy(),
             'items': topk.indices.cpu().numpy(),

@@ -128,8 +128,8 @@ class SASRecLitModule(L.LightningModule):
 
     def on_fit_end(self):
         self.model = self.model.to(self._get_device())
-        logger.info(f"Logging classification metrics...")
-        self._log_classification_metrics()
+        # logger.info(f"Logging classification metrics...")
+        # self._log_classification_metrics()
         
         logger.info(f"Logging ranking metrics...")
         self._log_ranking_metrics()
@@ -240,9 +240,13 @@ class SASRecLitModule(L.LightningModule):
         top_K = self.top_K
         top_k = self.top_k
         idm = self.idm
+        item_num =  self.model.item_num
 
         val_df = self.trainer.val_dataloaders.dataset.df
-
+        # replace the -1 elements with the num_items + 1  # +1 for padding token then convert to list
+        val_df["item_sequence"] = val_df["item_sequence"].apply(
+            lambda x: np.where(x == -1, item_num + 1, x).tolist()
+        )
         # Prepare input dataframe for prediction where user_indice is unique and item_sequence contains the last interaction in training data
         # Retain the first row of each user and use that as input for recommendations
         # We would compare that predictions with all the items this customer rates in val set
