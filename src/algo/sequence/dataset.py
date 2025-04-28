@@ -62,6 +62,7 @@ class UserItemBinaryDFDataset(UserItemRatingDFDataset):
         rating_col: str,
         timestamp_col: str,
         item_feature=None,
+        item_seq_col: str = None
     ):
         self.df = df.assign(**{rating_col: df[rating_col].gt(0).astype(np.float32)})
         self.user_col = user_col
@@ -69,6 +70,7 @@ class UserItemBinaryDFDataset(UserItemRatingDFDataset):
         self.rating_col = rating_col
         self.timestamp_col = timestamp_col
         self.item_feature = item_feature
+        self.item_seq_col = item_seq_col
 
 
     @classmethod
