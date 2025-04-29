@@ -27,12 +27,12 @@ class SASRecLitModule(L.LightningModule):
         self,
         model: SASRec,
         lr=0.0001,
-        maxlen=200,
-        hidden_units=128,
-        num_blocks=1,
-        num_epochs=100,
-        num_heads=2,
-        dropout_rate=0.5,
+        # maxlen=200,
+        # hidden_units=128,
+        # num_blocks=1,
+        # num_epochs=100,
+        # num_heads=2,
+        # dropout_rate=0.5,
         l2_emb=0.0001,
         user_col: str = "user_id",
         item_col: str = "parent_asin",
@@ -260,7 +260,7 @@ class SASRecLitModule(L.LightningModule):
             k=top_K,
             # batch_size=4,
         )
-        # print(f"Recommendations: {recommendations}")
+        print(f"Recommendations: {recommendations}")
 
         recommendations_df = pd.DataFrame(recommendations).pipe(
             create_rec_df, idm
@@ -269,7 +269,7 @@ class SASRecLitModule(L.LightningModule):
                 "recommendation": item_col,
             }
         )
-        # print(f"Recommendations_df: {recommendations_df}")
+        print(f"Recommendations_df: {recommendations_df}")
 
         label_df = create_label_df(
             val_df,
@@ -279,7 +279,7 @@ class SASRecLitModule(L.LightningModule):
             timestamp_col=timestamp_col,
         )
 
-        # print("Label_df: ", label_df)
+        print("Label_df: ", label_df)
 
         eval_df = merge_recs_with_target(
             recommendations_df,
@@ -290,7 +290,7 @@ class SASRecLitModule(L.LightningModule):
             rating_col=rating_col,
         )
 
-        # print("Eval_df: ", eval_df)
+        print("Eval_df: ", eval_df)
 
         self.eval_ranking_df = eval_df
 
@@ -319,7 +319,7 @@ class SASRecLitModule(L.LightningModule):
         evidently_report_fp = f"{self.log_dir}/evidently_report_ranking.html"
         os.makedirs(self.log_dir, exist_ok=True)
         report.save_html(evidently_report_fp)
-        # print(report.as_dict())
+        print(report.as_dict())
 
         if "mlflow" in str(self.logger.__class__).lower():
             run_id = self.logger.run_id
