@@ -128,8 +128,8 @@ class SASRecLitModule(L.LightningModule):
 
     def on_fit_end(self):
         self.model = self.model.to(self._get_device())
-        logger.info(f"Logging classification metrics...")
-        self._log_classification_metrics()
+        # logger.info(f"Logging classification metrics...")
+        # self._log_classification_metrics()
         
         logger.info(f"Logging ranking metrics...")
         self._log_ranking_metrics()
@@ -253,6 +253,7 @@ class SASRecLitModule(L.LightningModule):
         to_rec_df = val_df.sort_values(timestamp_col, ascending=True).drop_duplicates(
             subset=["user_indice"]
         )
+        print(f"to_rec_df: {to_rec_df}")
         recommendations = self.model.recommend(
             torch.tensor(to_rec_df["user_indice"].values, device=self._get_device()),
             torch.tensor(np.stack(to_rec_df["item_sequence"].values).astype(np.int32), device=self._get_device()).int(),
@@ -264,38 +265,48 @@ class SASRecLitModule(L.LightningModule):
             "items": [row.tolist() for row in recommendations["items"]],
             "scores": [row.tolist() for row in recommendations["scores"]],
         }
-        print(f"Recommendations: {recommendations}")
+        # print(f"Recommendations: {recommendations}")
         # Convert 2D arrays to lists of lists
-        recommendations_df = pd.DataFrame(recommendations).pipe(
-            create_rec_df, idm
-        ).rename(
-            columns={
-                "recommendation": item_col,
-            }
-        )
-        print(f"Recommendations_df: {recommendations_df}")
+        try:
+            recommendations_df = pd.DataFrame(recommendations).pipe(
+                create_rec_df, idm
+            ).rename(
+                columns={
+                    "recommendation": item_col,
+                }
+            )
+            print(f"Recommendations_df: {recommendations_df}")
+        except Exception as e:
+            print(f"Error in creating recommendations_df: {e}")
+            raise
+        try:
+            label_df = create_label_df(
+                val_df,
+                user_col=user_col,
+                item_col=item_col,
+                rating_col=rating_col,
+                timestamp_col=timestamp_col,
+            )
 
-        label_df = create_label_df(
-            val_df,
-            user_col=user_col,
-            item_col=item_col,
-            rating_col=rating_col,
-            timestamp_col=timestamp_col,
-        )
+            print("Label_df: ", label_df)
+        except Exception as e:
+            print(f"Error in creating label_df: {e}")
+            raise
+    
+        try:
+            eval_df = merge_recs_with_target(
+                recommendations_df,
+                label_df,
+                k=top_K,
+                user_col=user_col,
+                item_col=item_col,
+                rating_col=rating_col,
+            )
 
-        print("Label_df: ", label_df)
-
-        eval_df = merge_recs_with_target(
-            recommendations_df,
-            label_df,
-            k=top_K,
-            user_col=user_col,
-            item_col=item_col,
-            rating_col=rating_col,
-        )
-
-        print("Eval_df: ", eval_df)
-
+            print("Eval_df: ", eval_df)
+        except Exception as e:
+            print(f"Error in merging recommendations_df and label_df: {e}")
+            raise
         self.eval_ranking_df = eval_df
 
         column_mapping = ColumnMapping(

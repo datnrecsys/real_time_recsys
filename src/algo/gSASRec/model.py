@@ -29,7 +29,7 @@ class SASRec(nn.Module):
         self.seq_len = 10  # Fixed sequence length
 
         # Item and Position Embeddings
-        self.item_emb = nn.Embedding(item_num + 2, hidden_units, padding_idx=item_num + 1)
+        self.item_emb = nn.Embedding(item_num + 1, hidden_units, padding_idx=item_num)
         self.pos_emb = nn.Embedding(self.seq_len, hidden_units)
         self.emb_dropout = nn.Dropout(dropout_rate)
 
@@ -127,9 +127,12 @@ class SASRec(nn.Module):
             # print(seqs.shape)
             # print(all_items.shape)
             # print(users.shape)
+            user_len_debug = 10
             
             for i in range(len(users)):
                 # print(i)
+                # if i == user_len_debug:
+                #     break
                 seq = seqs[i].unsqueeze(0).repeat(self.item_num, 1)                
                 items = all_items#.unsqueeze(1)
                 user = users[i].repeat(self.item_num, 1).squeeze(1)
@@ -144,8 +147,8 @@ class SASRec(nn.Module):
         # print(scores[0].shape)
         # print(scores[0])
         topk = torch.stack(scores).topk(k)
-        print(topk.values.shape)
-        print("DEBUG")
+        # print(topk.values.shape)
+        # print("DEBUG")
         
         return {
             'user_ids': users.cpu().numpy(),

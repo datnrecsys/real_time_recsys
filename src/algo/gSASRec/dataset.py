@@ -86,7 +86,7 @@ class SASRecDataset(Dataset):
         self.maxlen = maxlen
         self.pad_token = pad_token
         self.timestamp_col = timestamp_col
-        self.num_items = df[item_col].max() if item_col in df else 0
+        # self.num_items = df[item_col].max() if item_col in df else 0
 
     def __len__(self):
         return len(self.df)
@@ -106,8 +106,7 @@ class SASRecDataset(Dataset):
             "rating": torch.as_tensor(rating, dtype=torch.long),
         }
     def _replace_padding(self,seq):
-        # replace the -1 elements with the num_items + 1  # +1 for padding token
-        return np.where(seq == -1, self.num_items + 1, seq)
+        return np.where(seq == -1, self.pad_token, seq)
 
     def _left_pad(self, seq):
         if len(seq) > self.maxlen:
