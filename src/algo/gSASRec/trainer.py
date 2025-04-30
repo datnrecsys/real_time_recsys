@@ -253,7 +253,9 @@ class SASRecLitModule(L.LightningModule):
         to_rec_df = val_df.sort_values(timestamp_col, ascending=True).drop_duplicates(
             subset=["user_indice"]
         )
-
+        print(f"to_rec_df: {to_rec_df}")
+        print(torch.tensor(to_rec_df["user_indice"].shape, device=self._get_device()))
+        print(torch.tensor(np.stack(to_rec_df["item_sequence"].values).astype(np.int32).shape, device=self._get_device()))
         recommendations = self.model.recommend(
             torch.tensor(to_rec_df["user_indice"].values, device=self._get_device()),
             torch.tensor(np.stack(to_rec_df["item_sequence"].values).astype(np.int32), device=self._get_device()).int(),
