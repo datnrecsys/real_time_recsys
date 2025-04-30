@@ -259,6 +259,11 @@ class SASRecLitModule(L.LightningModule):
             k=top_K,
             # batch_size=4,
         )
+        recommendations = {
+            "user_ids": recommendations["user_ids"],
+            "items": [row.tolist() for row in recommendations["items"]],
+            "scores": [row.tolist() for row in recommendations["scores"]],
+        }
         print(f"Recommendations: {recommendations}")
 
         recommendations_df = pd.DataFrame(recommendations).pipe(
