@@ -261,11 +261,7 @@ class SASRecLitModule(L.LightningModule):
             k=top_K,
             # batch_size=4,
         )
-        recommendations = {
-            "user_indice": recommendations["user_indice"],
-            "recommendation": [row.tolist() for row in recommendations["recommendation"]],
-            "score": [row.tolist() for row in recommendations["score"]],
-        }
+
         # print(f"Recommendations: {recommendations}")
         
         try:
