@@ -140,10 +140,12 @@ class SASRec(nn.Module):
                 score = self.predict(user, seq, items)
                 print("score shape",score.shape)
                 scores.append(score)
-        
+        print(len(scores))
+        print(scores[0].shape)
+        print(scores[0])
         topk = torch.stack(scores).topk(k)
-        # print(topk.values.shape)
-        # print("DEBUG")
+        print(topk.values.shape)
+        print("DEBUG")
         
         return {
             'user_ids': users.cpu().numpy(),
