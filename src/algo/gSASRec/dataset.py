@@ -62,7 +62,7 @@ class SASRecDataset(Dataset):
         item_col: str = "target",
         rating_col: str = "rating",
         maxlen: int = 10,
-        pad_token: int = 0,
+        pad_token: int = 4817,
         timestamp_col: str = None,
     ):
         """
@@ -86,7 +86,6 @@ class SASRecDataset(Dataset):
         self.maxlen = maxlen
         self.pad_token = pad_token
         self.timestamp_col = timestamp_col
-        # self.num_items = df[item_col].max() if item_col in df else 0
 
     def __len__(self):
         return len(self.df)

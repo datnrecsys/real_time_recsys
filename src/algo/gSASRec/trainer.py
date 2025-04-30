@@ -27,12 +27,6 @@ class SASRecLitModule(L.LightningModule):
         self,
         model: SASRec,
         lr=0.0001,
-        # maxlen=200,
-        # hidden_units=128,
-        # num_blocks=1,
-        # num_epochs=100,
-        # num_heads=2,
-        # dropout_rate=0.5,
         l2_emb=0.0001,
         user_col: str = "user_id",
         item_col: str = "parent_asin",
@@ -89,12 +83,18 @@ class SASRecLitModule(L.LightningModule):
         input_item_ids = batch["item"]
         input_item_sequences = batch["sequence"].int()
         
+        # print(f"input_item_sequences: {input_item_sequences[4]}")
+        # print(f"input_item_ids: {input_item_ids[4]}")
 
         labels = batch["rating"].float()
-
+        # print(f"Labels: {labels[4]}")
         predictions = self.model.forward(input_user_ids, input_item_sequences, input_item_ids).view(labels.shape)
+        # print(f"Predictions: {predictions[4]}")
+        # print(f"predictions.shape: {predictions.shape}")
+        # print(f"predictions: {predictions}")        
         loss_fn = self._get_loss_fn()
         loss = loss_fn(predictions, labels)
+        # print(f"Loss: {loss}")
 
         # https://lightning.ai/docs/pytorch/stable/visualize/logging_advanced.html#in-lightningmodule
         self.log("val_loss", loss, prog_bar=True, logger=True, sync_dist=True, on_epoch=True)
@@ -128,8 +128,8 @@ class SASRecLitModule(L.LightningModule):
 
     def on_fit_end(self):
         self.model = self.model.to(self._get_device())
-        logger.info(f"Logging classification metrics...")
-        self._log_classification_metrics()
+        # logger.info(f"Logging classification metrics...")
+        # self._log_classification_metrics()
         
         logger.info(f"Logging ranking metrics...")
         self._log_ranking_metrics()
@@ -243,9 +243,9 @@ class SASRecLitModule(L.LightningModule):
         item_num =  self.model.item_num
 
         val_df = self.trainer.val_dataloaders.dataset.df
-        # replace the -1 elements with the num_items + 1  # +1 for padding token then convert to list
+        # replace the -1 elements with the num_items  
         val_df["item_sequence"] = val_df["item_sequence"].apply(
-            lambda x: np.where(x == -1, item_num + 1, x).tolist()
+            lambda x: np.where(x == -1, item_num, x).tolist()
         )
         # Prepare input dataframe for prediction where user_indice is unique and item_sequence contains the last interaction in training data
         # Retain the first row of each user and use that as input for recommendations
