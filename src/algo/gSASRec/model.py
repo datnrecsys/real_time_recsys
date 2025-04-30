@@ -129,7 +129,7 @@ class SASRec(nn.Module):
             # print(users.shape)
             
             for i in range(len(users)):
-                print(i)
+                # print(i)
                 seq = seqs[i].unsqueeze(0).repeat(self.item_num, 1)                
                 items = all_items#.unsqueeze(1)
                 user = users[i].repeat(self.item_num, 1).squeeze(1)
@@ -138,7 +138,7 @@ class SASRec(nn.Module):
                 # print("items shape",items.shape)
                 # print("user shape",user.shape)
                 score = self.predict(user, seq, items)
-                print("score shape",score.shape)
+                # print("score shape",score.shape)
                 scores.append(score)
         print(len(scores))
         print(scores[0].shape)
