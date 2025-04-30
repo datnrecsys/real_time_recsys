@@ -21,21 +21,20 @@ def create_rec_df(df,
     Returns:
         pd.DataFrame: A DataFrame with mapped user and item IDs and recommendation.
     """
-    exploded_df = df.explode("recommendation").reset_index(drop=True)
-    
-    return exploded_df.assign(
-        rec_ranking = lambda _df: (
-            _df.groupby("user_indice", as_index=False)["score"].rank(
+    return df.assign(
+        rec_ranking = lambda df:(
+            df.groupby("user_indice", as_index=False)["score"].rank(
                 ascending=False, method="first"
             )
         ),
         **{
-            user_col: lambda _df: _df["user_indice"].apply(
+            user_col: lambda df: df["user_indice"].apply(
                 lambda user_indice: idm.get_user_id(user_indice)
             ),
-            item_col: lambda _df: _df["recommendation"].apply(
-                lambda item_idx: idm.get_item_id(item_idx)
+            item_col: lambda df: df["recommendation"].apply(
+                lambda parent_asin: idm.get_item_id(parent_asin)
             ),
+
         }
     )
 
