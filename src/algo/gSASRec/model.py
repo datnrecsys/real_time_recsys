@@ -127,12 +127,12 @@ class SASRec(nn.Module):
             # print(seqs.shape)
             # print(all_items.shape)
             # print(users.shape)
-            user_len_debug = 10
+            # user_len_debug = 10
             
             for i in range(len(users)):
                 # print(i)
-                if i == user_len_debug:
-                    break
+                # if i == user_len_debug:
+                    # break
                 seq = seqs[i].unsqueeze(0).repeat(self.item_num, 1)                
                 items = all_items#.unsqueeze(1)
                 user = users[i].repeat(self.item_num, 1).squeeze(1)
