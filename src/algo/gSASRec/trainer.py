@@ -265,7 +265,7 @@ class SASRecLitModule(L.LightningModule):
             "scores": [row.tolist() for row in recommendations["scores"]],
         }
         print(f"Recommendations: {recommendations}")
-
+        # Convert 2D arrays to lists of lists
         recommendations_df = pd.DataFrame(recommendations).pipe(
             create_rec_df, idm
         ).rename(
