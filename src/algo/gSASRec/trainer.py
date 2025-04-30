@@ -253,7 +253,8 @@ class SASRecLitModule(L.LightningModule):
         to_rec_df = val_df.sort_values(timestamp_col, ascending=True).drop_duplicates(
             subset=["user_indice"]
         )
-        print(f"to_rec_df: {to_rec_df}")
+        # print(f"to_rec_df: {to_rec_df}")
+
         recommendations = self.model.recommend(
             torch.tensor(to_rec_df["user_indice"].values, device=self._get_device()),
             torch.tensor(np.stack(to_rec_df["item_sequence"].values).astype(np.int32), device=self._get_device()).int(),
@@ -266,7 +267,7 @@ class SASRecLitModule(L.LightningModule):
             "score": [row.tolist() for row in recommendations["score"]],
         }
         # print(f"Recommendations: {recommendations}")
-        # Convert 2D arrays to lists of lists
+        
         try:
             recommendations_df = pd.DataFrame(recommendations).pipe(
                 create_rec_df, idm
