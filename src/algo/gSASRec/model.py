@@ -151,9 +151,9 @@ class SASRec(nn.Module):
         # print("DEBUG")
         
         return {
-            'user_ids': users.cpu().numpy(),
-            'items': topk.indices.cpu().numpy(),
-            'scores': topk.values.cpu().numpy()
+            'user_indice': users.cpu().numpy(),
+            'recommendation': topk.indices.cpu().numpy(),
+            'score': topk.values.cpu().numpy()
         }
 
 # Test case

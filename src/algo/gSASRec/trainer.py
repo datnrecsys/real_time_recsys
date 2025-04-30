@@ -128,8 +128,8 @@ class SASRecLitModule(L.LightningModule):
 
     def on_fit_end(self):
         self.model = self.model.to(self._get_device())
-        # logger.info(f"Logging classification metrics...")
-        # self._log_classification_metrics()
+        logger.info(f"Logging classification metrics...")
+        self._log_classification_metrics()
         
         logger.info(f"Logging ranking metrics...")
         self._log_ranking_metrics()
@@ -261,9 +261,9 @@ class SASRecLitModule(L.LightningModule):
             # batch_size=4,
         )
         recommendations = {
-            "user_ids": recommendations["user_ids"],
-            "items": [row.tolist() for row in recommendations["items"]],
-            "scores": [row.tolist() for row in recommendations["scores"]],
+            "user_indice": recommendations["user_indice"],
+            "recommendation": [row.tolist() for row in recommendations["recommendation"]],
+            "score": [row.tolist() for row in recommendations["score"]],
         }
         # print(f"Recommendations: {recommendations}")
         # Convert 2D arrays to lists of lists
