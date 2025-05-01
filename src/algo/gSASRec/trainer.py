@@ -128,8 +128,8 @@ class SASRecLitModule(L.LightningModule):
 
     def on_fit_end(self):
         self.model = self.model.to(self._get_device())
-        # logger.info(f"Logging classification metrics...")
-        # self._log_classification_metrics()
+        logger.info(f"Logging classification metrics...")
+        self._log_classification_metrics()
         
         logger.info(f"Logging ranking metrics...")
         self._log_ranking_metrics()
