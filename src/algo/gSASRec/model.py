@@ -137,7 +137,7 @@ class SASRec(nn.Module):
         # Predict target item score
         target_emb = self.item_emb(target_item)
         logits = (final_state * target_emb).sum(dim=-1)
-        # print("logits", logits)
+        print("logits", logits)
         return logits
 
     def predict(self, user_ids, seq, target_item):
