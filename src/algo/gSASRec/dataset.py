@@ -108,25 +108,21 @@ class SASRecDataset(Dataset):
         return np.where(seq == -1, self.pad_token, seq)
 
     def _left_pad(self, seq):
-        if len(seq) > self.maxlen:
-            return seq[-self.maxlen:]  
-        elif len(seq) < self.maxlen:
-            return [self.pad_token] * (self.maxlen - len(seq)) + seq  
-        return seq
+        pass
 
     @classmethod
     def get_default_loss_fn(cls):
         return nn.BCEWithLogitsLoss()
 
-    @classmethod
-    def forward(cls, model, batch_input, loss_fn=None, device="cpu"):
-        users = batch_input["user"].to(device)
-        seqs = batch_input["sequence"].to(device)
-        targets = batch_input["target"].to(device)
+    # @classmethod
+    # def forward(cls, model, batch_input, loss_fn=None, device="cpu"):
+    #     users = batch_input["user"].to(device)
+    #     seqs = batch_input["sequence"].to(device)
+    #     targets = batch_input["target"].to(device)
         
-        logits = model(users, seqs).squeeze()
+    #     logits = model(users, seqs).squeeze()
         
-        if loss_fn is None:
-            loss_fn = cls.get_default_loss_fn()
+    #     if loss_fn is None:
+    #         loss_fn = cls.get_default_loss_fn()
         
-        return loss_fn(logits, targets)
+    #     return loss_fn(logits, targets)
