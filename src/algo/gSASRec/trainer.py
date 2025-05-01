@@ -128,8 +128,8 @@ class SASRecLitModule(L.LightningModule):
 
     def on_fit_end(self):
         self.model = self.model.to(self._get_device())
-        logger.info(f"Logging classification metrics...")
-        self._log_classification_metrics()
+        # logger.info(f"Logging classification metrics...")
+        # self._log_classification_metrics()
         
         logger.info(f"Logging ranking metrics...")
         self._log_ranking_metrics()
@@ -290,7 +290,7 @@ class SASRecLitModule(L.LightningModule):
                 timestamp_col=timestamp_col,
             )
 
-            # print("Label_df: ", label_df)
+            # print("Label_df: ", label_df.head())
         except Exception as e:
             print(f"Error in creating label_df: {e}")
             raise
@@ -305,7 +305,7 @@ class SASRecLitModule(L.LightningModule):
                 rating_col=rating_col,
             )
 
-            # print("Eval_df: ", eval_df)
+            # print("Eval_df: ", eval_df.head())
         except Exception as e:
             print(f"Error in merging recommendations_df and label_df: {e}")
             raise

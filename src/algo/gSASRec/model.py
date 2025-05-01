@@ -14,6 +14,14 @@ class PointWiseFeedForward(nn.Module):
         self.conv2 = nn.Conv1d(hidden_units, hidden_units, kernel_size=1)
         self.dropout2 = nn.Dropout(dropout_rate)
 
+        # Xavier initialization for Conv1d layers
+        nn.init.xavier_uniform_(self.conv1.weight)
+        if self.conv1.bias is not None:
+            nn.init.zeros_(self.conv1.bias)  # Initialize bias to 0
+        nn.init.xavier_uniform_(self.conv2.weight)
+        if self.conv2.bias is not None:
+            nn.init.zeros_(self.conv2.bias)  # Initialize bias to 0
+
     def forward(self, inputs):
         outputs = self.dropout1(self.relu(self.conv1(inputs.transpose(-1, -2))))
         outputs = self.dropout2(self.conv2(outputs).transpose(-1, -2))
@@ -33,6 +41,11 @@ class SASRec(nn.Module):
         self.pos_emb = nn.Embedding(self.seq_len, hidden_units)
         self.emb_dropout = nn.Dropout(dropout_rate)
 
+        # Xavier initialization for embeddings
+        nn.init.xavier_uniform_(self.item_emb.weight[:-1])  # Skip padding_idx row
+        self.item_emb.weight.data[item_num].zero_()  # Ensure padding_idx row is 0
+        nn.init.xavier_uniform_(self.pos_emb.weight)
+
         # Transformer Blocks
         self.attention_layernorms = nn.ModuleList()
         self.attention_layers = nn.ModuleList()
@@ -41,21 +54,33 @@ class SASRec(nn.Module):
         
         for _ in range(num_blocks):
             # Attention
-            self.attention_layernorms.append(nn.LayerNorm(hidden_units, eps=1e-8))
+            self.attention_layernorms.append(nn.LayerNorm(hidden_units, eps=1e-6))
             self.attention_layers.append(nn.MultiheadAttention(
                 embed_dim=hidden_units,
                 num_heads=num_heads,
                 dropout=dropout_rate,
                 batch_first=True
             ))
+
+            # Xavier initialization for MultiheadAttention
+            for name, param in self.attention_layers.named_parameters():
+                if 'weight' in name:
+                    nn.init.xavier_uniform_(param)
+                elif 'bias' in name:
+                    nn.init.zeros_(param)  # Initialize bias to 0
             
             # FFN
-            self.forward_layernorms.append(nn.LayerNorm(hidden_units, eps=1e-8))
+            self.forward_layernorms.append(nn.LayerNorm(hidden_units, eps=1e-6))
             self.forward_layers.append(PointWiseFeedForward(hidden_units, dropout_rate))
 
         # Final layers
         self.final_layer = nn.Linear(hidden_units, 1)
         self.sigmoid = nn.Sigmoid()
+
+        # Xavier initialization for final layer
+        nn.init.xavier_uniform_(self.final_layer.weight)
+        if self.final_layer.bias is not None:
+            nn.init.zeros_(self.final_layer.bias)  # Initialize bias to 0
 
     def get_mask(self, seq):
         return (seq != self.item_num )
@@ -79,6 +104,9 @@ class SASRec(nn.Module):
         # print(target_item)
         # print("user_ids.shape", user_ids.shape)
         # print(user_ids)
+
+        assert (seq < self.item_num + 1).all(), f"Invalid item index: {seq.max()}"
+        
         seq_emb = self.item_emb(seq) * (self.hidden_units ** 0.5)
         positions = torch.arange(self.seq_len, device=seq.device).unsqueeze(0)
         seq_emb += self.pos_emb(positions)
@@ -109,6 +137,7 @@ class SASRec(nn.Module):
         # Predict target item score
         target_emb = self.item_emb(target_item)
         logits = (final_state * target_emb).sum(dim=-1)
+        # print("logits", logits)
         return logits
 
     def predict(self, user_ids, seq, target_item):
@@ -127,12 +156,12 @@ class SASRec(nn.Module):
             # print(seqs.shape)
             # print(all_items.shape)
             # print(users.shape)
-            # user_len_debug = 10
+            user_len_debug = 10
             
             for i in range(len(users)):
                 # print(i)
-                # if i == user_len_debug:
-                    # break
+                if i == user_len_debug:
+                    break
                 seq = seqs[i].unsqueeze(0).repeat(self.item_num, 1)                
                 items = all_items#.unsqueeze(1)
                 user = users[i].repeat(self.item_num, 1).squeeze(1)
@@ -151,9 +180,9 @@ class SASRec(nn.Module):
         # print("DEBUG")
         
         return {
-            'user_indice': users.cpu().numpy().tolist(), 
-            'recommendation': topk.indices.cpu().numpy().tolist(), 
-            'score': topk.values.cpu().numpy().tolist()  
+            'user_indice': users[0:user_len_debug].cpu().numpy().tolist(), 
+            'recommendation': topk.indices[0:user_len_debug].cpu().numpy().tolist(), 
+            'score': topk.values[0:user_len_debug].cpu().numpy().tolist()  
         }
 
 # Test case
