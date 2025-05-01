@@ -127,12 +127,12 @@ class SASRec(nn.Module):
             # print(seqs.shape)
             # print(all_items.shape)
             # print(users.shape)
-            # user_len_debug = 10
+            user_len_debug = 10
             
             for i in range(len(users)):
                 # print(i)
-                # if i == user_len_debug:
-                    # break
+                if i == user_len_debug:
+                    break
                 seq = seqs[i].unsqueeze(0).repeat(self.item_num, 1)                
                 items = all_items#.unsqueeze(1)
                 user = users[i].repeat(self.item_num, 1).squeeze(1)
@@ -151,9 +151,9 @@ class SASRec(nn.Module):
         # print("DEBUG")
         
         return {
-            'user_indice': users.cpu().numpy().tolist(), 
-            'recommendation': topk.indices.cpu().numpy().tolist(), 
-            'score': topk.values.cpu().numpy().tolist()  
+            'user_indice': users[0:user_len_debug].cpu().numpy().tolist(), 
+            'recommendation': topk.indices[0:user_len_debug].cpu().numpy().tolist(), 
+            'score': topk.values[0:user_len_debug].cpu().numpy().tolist()  
         }
 
 # Test case

@@ -263,16 +263,21 @@ class SASRecLitModule(L.LightningModule):
         )
 
         # print(f"Recommendations: {recommendations}")
+        # print(f"user_indice: {recommendations['user_indice']}")
+        # print(f"recommendation: {recommendations['recommendation']}")
+        # print(f"score: {recommendations['score']}")
         
+        recommendations_df = pd.DataFrame(recommendations).explode(["recommendation","score"]).reset_index(drop=True)
+        # print(f"Recommendations_df: {recommendations_df.head()}")
         try:
-            recommendations_df = pd.DataFrame(recommendations).pipe(
+            recommendations_df = recommendations_df.pipe(
                 create_rec_df, idm
             ).rename(
                 columns={
                     "recommendation": item_col,
                 }
             )
-            print(f"Recommendations_df: {recommendations_df}")
+            # print(f"Recommendations_df: {recommendations_df}")
         except Exception as e:
             print(f"Error in creating recommendations_df: {e}")
             raise
@@ -285,7 +290,7 @@ class SASRecLitModule(L.LightningModule):
                 timestamp_col=timestamp_col,
             )
 
-            print("Label_df: ", label_df)
+            # print("Label_df: ", label_df)
         except Exception as e:
             print(f"Error in creating label_df: {e}")
             raise
@@ -300,7 +305,7 @@ class SASRecLitModule(L.LightningModule):
                 rating_col=rating_col,
             )
 
-            print("Eval_df: ", eval_df)
+            # print("Eval_df: ", eval_df)
         except Exception as e:
             print(f"Error in merging recommendations_df and label_df: {e}")
             raise
