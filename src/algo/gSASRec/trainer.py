@@ -62,16 +62,16 @@ class SASRecLitModule(L.LightningModule):
         input_user_ids = batch["user"]
         input_item_ids = batch["item"]
         input_item_sequences = batch["sequence"].int()
-
+        # print(f"input_item_sequences: {input_item_sequences}")
         labels = batch["rating"].float()
         
         predictions = self.model.forward(input_user_ids, input_item_sequences, input_item_ids).view(labels.shape)
 
         loss_fn = self._get_loss_fn()
+        # print(f"predictions: {predictions}")
+        # print(f"labels: {labels}")
         loss = loss_fn(predictions, labels)
-
-        for param in self.model.item_emb.parameters():
-            loss += self.l2_emb * torch.norm(param)
+        # print(f"Loss: {loss}")
 
         # https://lightning.ai/docs/pytorch/stable/visualize/logging_advanced.html#in-lightningmodule
         self.log("train_loss", loss, prog_bar=True, logger=True, sync_dist=True, on_epoch=True)
@@ -100,24 +100,20 @@ class SASRecLitModule(L.LightningModule):
         self.log("val_loss", loss, prog_bar=True, logger=True, sync_dist=True, on_epoch=True)
 
         return loss
-    
-    def configure_optimizers(self):
-        # Create the optimizer
-        optimizer = torch.optim.Adam(
-            self.model.parameters(),
-            lr=self.lr,
-            weight_decay=self.l2_emb,
-        )
+    def on_after_backward(self):
+        for name, p in self.model.named_parameters():
+            if p.requires_grad and p.grad is not None:
+                self.log(f"grad_max/{name}", p.grad.abs().max(), prog_bar=False)
+                self.log(f"param_max/{name}", p.data.abs().max(), prog_bar=False)
 
-        # Create the scheduler: https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.core.LightningModule.html#lightning.pytorch.core.LightningModule.configure_optimizers
-        scheduler = {
-            "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
-                optimizer, mode="min", factor=0.3, patience=2
-            ),
+    def configure_optimizers(self):
+        optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.lr, weight_decay=self.l2_emb)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.3, patience=2)
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": scheduler,
             "monitor": "val_loss",
         }
-
-        return {"optimizer": optimizer, "lr_scheduler": scheduler}
     
     def on_validation_epoch_end(self):
         sch = self.lr_schedulers()
@@ -128,8 +124,8 @@ class SASRecLitModule(L.LightningModule):
 
     def on_fit_end(self):
         self.model = self.model.to(self._get_device())
-        # logger.info(f"Logging classification metrics...")
-        # self._log_classification_metrics()
+        logger.info(f"Logging classification metrics...")
+        self._log_classification_metrics()
         
         logger.info(f"Logging ranking metrics...")
         self._log_ranking_metrics()

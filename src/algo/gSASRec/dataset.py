@@ -91,18 +91,19 @@ class SASRecDataset(Dataset):
         return len(self.df)
 
     def __getitem__(self, idx):
-        # raw data
-        user = self.df[self.user_col].iloc[idx]
-        seq = self.df[self.seq_col].iloc[idx]  # list
-        item = self.df[self.item_col].iloc[idx]
-        rating = self.df[self.rating_col].iloc[idx]
-        seq = self._replace_padding(seq)
-
+        seq = np.array(self.df[self.seq_col].iloc[idx], dtype=np.int64)
+        # replace missing values
+        seq = np.where(seq == -1, self.pad_token, seq)
+        # sanity checks
+        if np.isnan(seq).any():
+            raise ValueError(f"NaN in sequence at idx {idx}: {seq}")
+        if (seq < 0).any() or (seq.max() > self.pad_token):
+            raise ValueError(f"Invalid token index at idx {idx}: min={seq.min()}, max={seq.max()}")
         return {
-            "user": torch.as_tensor(user, dtype=torch.long),
+            "user": torch.as_tensor(self.df[self.user_col].iloc[idx], dtype=torch.long),
             "sequence": torch.as_tensor(seq, dtype=torch.long),
-            "item": torch.as_tensor(item, dtype=torch.long),
-            "rating": torch.as_tensor(rating, dtype=torch.long),
+            "item": torch.as_tensor(self.df[self.item_col].iloc[idx], dtype=torch.long),
+            "rating": torch.as_tensor(self.df[self.rating_col].iloc[idx], dtype=torch.float32),
         }
     def _replace_padding(self,seq):
         return np.where(seq == -1, self.pad_token, seq)

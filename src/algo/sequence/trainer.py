@@ -69,7 +69,7 @@ class SeqModellingLitModule(L.LightningModule):
 
         loss_fn = self._get_loss_fn()
         loss = loss_fn(predictions, labels)
-
+        self.model.float() 
         # https://lightning.ai/docs/pytorch/stable/visualize/logging_advanced.html#in-lightningmodule
         self.log("train_loss", loss, prog_bar=True, logger=True, sync_dist=True, on_epoch=True)
 
