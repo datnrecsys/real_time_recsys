@@ -14,30 +14,8 @@ class PointWiseFeedForward(nn.Module):
         self.conv2 = nn.Conv1d(hidden_units, hidden_units, kernel_size=1)
         self.dropout2 = nn.Dropout(dropout_rate)
 
-        # # hook cho conv1
-        # self.conv1.register_full_backward_hook(self._make_conv_hook("conv1"))
-        # # hook cho conv2
-        # self.conv2.register_full_backward_hook(self._make_conv_hook("conv2"))
-        
-        nn.init.kaiming_uniform_(self.conv1.weight, nonlinearity="relu")
-        if self.conv1.bias is not None:
-            nn.init.zeros_(self.conv1.bias)
-        # conv2 is linear, so Xavier is fine there
-        nn.init.xavier_uniform_(self.conv2.weight, gain=0.1)
-        if self.conv2.bias is not None:
-            nn.init.zeros_(self.conv2.bias)
-
-    # def _make_conv_hook(self, name):
-    #     def hook(module, grad_input, grad_output):
-    #         # grad_input, grad_output là tuple của các tensor gradients
-    #         for i, g in enumerate(grad_input):
-    #             if g is not None and torch.isnan(g).any():
-    #                 print(f"NaN in {name}.grad_input[{i}]")
-    #         for i, g in enumerate(grad_output):
-    #             if g is not None and torch.isnan(g).any():
-    #                 print(f"NaN in {name}.grad_output[{i}]")
-    #         return None  # không modify gradient
-    #     return hook
+        nn.init.xavier_normal_(self.conv1.weight)
+        nn.init.xavier_normal_(self.conv2.weight)
 
     def forward(self, inputs):
         # outputs = self.dropout1(self.relu(self.conv1(inputs.transpose(-1, -2))))
@@ -46,15 +24,8 @@ class PointWiseFeedForward(nn.Module):
 
         x = inputs.transpose(-1, -2)         # [B, H, L]
         y = self.conv1(x)
-        # tensor-level hook: in ra ngay khi grad chảy qua y
-        # y.register_hook(lambda grad: print("grad of conv1 output has NaN") 
-        #                 if torch.isnan(grad).any() else None)
         y = self.relu(y)
         z = self.dropout1(y)
-        # z = torch.clamp(z, -1e3, 1e3)  # clamp để tránh NaN trong dropout
-        # cũng hook lên z trước conv2
-        # z.register_hook(lambda grad: print("grad of conv1 - dropout1 output has NaN") 
-        #                 if torch.isnan(grad).any() else None)
 
         w = self.conv2(z)
         w = w.transpose(-1, -2)
@@ -77,9 +48,9 @@ class SASRec(nn.Module):
         self.emb_dropout = nn.Dropout(dropout_rate)
 
         # Xavier initialization for embeddings
-        nn.init.xavier_uniform_(self.item_emb.weight)  
+        nn.init.xavier_normal_(self.item_emb.weight)  
         self.item_emb.weight.data[item_num].zero_()   
-        nn.init.xavier_uniform_(self.pos_emb.weight)
+        nn.init.xavier_normal_(self.pos_emb.weight)
 
         # Transformer Blocks
         self.attention_layernorms = nn.ModuleList()
@@ -101,7 +72,7 @@ class SASRec(nn.Module):
             # Xavier initialization for MultiheadAttention
             for name, param in self.attention_layers.named_parameters():
                 if 'weight' in name:
-                    nn.init.xavier_uniform_(param)
+                    nn.init.xavier_normal_(param)
                 elif 'bias' in name:
                     nn.init.zeros_(param)  # Initialize bias to 0
             
@@ -169,9 +140,6 @@ class SASRec(nn.Module):
         positions = torch.arange(self.seq_len, device=seq.device).unsqueeze(0)
         seq_emb += self.pos_emb(positions)
         seq_emb = self.emb_dropout(seq_emb)
-
-        # if torch.isnan(seq_emb).any():
-        #     print("NaN values found in seq_emb")
         
         mask = self.get_mask(seq)
         
@@ -220,13 +188,9 @@ class SASRec(nn.Module):
                     nan_positions = torch.where(seq_nan_mask)[0]
                     print(f"NaN at positions: {nan_positions.tolist()}")
                     
-                    # Kiểm tra các giá trị
-            
             seq_emb = seq_emb + attn_out
-            # print(f"seq_emb", seq_emb)
             # FFN
             seq_emb = self.forward_layers[i](self.forward_layernorms[i](seq_emb)) + seq_emb
-            # print(f"seq_emb", seq_emb)
         # Get final state
         final_state = seq_emb[:, -1, :]  # Last item in sequence
 
@@ -243,9 +207,6 @@ class SASRec(nn.Module):
         all_items = torch.arange(0, self.item_num, device=seqs.device)
         scores = []
         with torch.no_grad():
-            # print(seqs.shape)
-            # print(all_items.shape)
-            # print(users.shape)
             user_len_debug = 10
             
             for i in range(len(users)):
@@ -255,19 +216,9 @@ class SASRec(nn.Module):
                 seq = seqs[i].unsqueeze(0).repeat(self.item_num, 1)                
                 items = all_items#.unsqueeze(1)
                 user = users[i].repeat(self.item_num, 1).squeeze(1)
-                # print("seq shape",seq.shape)
-                # print(seq)
-                # print("items shape",items.shape)
-                # print("user shape",user.shape)
                 score = self.predict(user, seq, items)
-                # print("score shape",score.shape)
                 scores.append(score)
-        # print(len(scores))
-        # print(scores[0].shape)
-        # print(scores[0])
         topk = torch.stack(scores).topk(k)
-        # print(topk.values.shape)
-        # print("DEBUG")
         
         return {
             'user_indice': users[0:user_len_debug].cpu().numpy().tolist(), 

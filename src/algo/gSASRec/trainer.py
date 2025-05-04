@@ -124,11 +124,13 @@ class SASRecLitModule(L.LightningModule):
 
     def on_fit_end(self):
         self.model = self.model.to(self._get_device())
+        logger.info(f"Logging ranking metrics...")
+        self._log_ranking_metrics()
+        
         logger.info(f"Logging classification metrics...")
         self._log_classification_metrics()
         
-        logger.info(f"Logging ranking metrics...")
-        self._log_ranking_metrics()
+        
 
         logger.info(f"Evidently metrics are available at: {os.path.abspath(self.log_dir)}")
 
@@ -264,7 +266,7 @@ class SASRecLitModule(L.LightningModule):
         # print(f"score: {recommendations['score']}")
         
         recommendations_df = pd.DataFrame(recommendations).explode(["recommendation","score"]).reset_index(drop=True)
-        # print(f"Recommendations_df: {recommendations_df.head()}")
+        print(f"Recommendations_df: {recommendations_df.head()}")
         try:
             recommendations_df = recommendations_df.pipe(
                 create_rec_df, idm
@@ -273,7 +275,7 @@ class SASRecLitModule(L.LightningModule):
                     "recommendation": item_col,
                 }
             )
-            # print(f"Recommendations_df: {recommendations_df}")
+            print(f"Recommendations_df: {recommendations_df}")
         except Exception as e:
             print(f"Error in creating recommendations_df: {e}")
             raise
@@ -286,7 +288,7 @@ class SASRecLitModule(L.LightningModule):
                 timestamp_col=timestamp_col,
             )
 
-            # print("Label_df: ", label_df.head())
+            print("Label_df: ", label_df.head())
         except Exception as e:
             print(f"Error in creating label_df: {e}")
             raise
@@ -301,7 +303,7 @@ class SASRecLitModule(L.LightningModule):
                 rating_col=rating_col,
             )
 
-            # print("Eval_df: ", eval_df.head())
+            print("Eval_df: ", eval_df.head())
         except Exception as e:
             print(f"Error in merging recommendations_df and label_df: {e}")
             raise
