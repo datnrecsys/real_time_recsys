@@ -100,11 +100,11 @@ class SASRecLitModule(L.LightningModule):
         self.log("val_loss", loss, prog_bar=True, logger=True, sync_dist=True, on_epoch=True)
 
         return loss
-    def on_after_backward(self):
-        for name, p in self.model.named_parameters():
-            if p.requires_grad and p.grad is not None:
-                self.log(f"grad_max/{name}", p.grad.abs().max(), prog_bar=False)
-                self.log(f"param_max/{name}", p.data.abs().max(), prog_bar=False)
+    # def on_after_backward(self):
+    #     for name, p in self.model.named_parameters():
+    #         if p.requires_grad and p.grad is not None:
+    #             self.log(f"grad_max/{name}", p.grad.abs().max(), prog_bar=False)
+    #             self.log(f"param_max/{name}", p.data.abs().max(), prog_bar=False)
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.lr, weight_decay=self.l2_emb)
@@ -124,14 +124,12 @@ class SASRecLitModule(L.LightningModule):
 
     def on_fit_end(self):
         self.model = self.model.to(self._get_device())
+        logger.info(f"Logging classification metrics...")
+        self._log_classification_metrics()
+
         logger.info(f"Logging ranking metrics...")
         self._log_ranking_metrics()
         
-        logger.info(f"Logging classification metrics...")
-        self._log_classification_metrics()
-        
-        
-
         logger.info(f"Evidently metrics are available at: {os.path.abspath(self.log_dir)}")
 
 
