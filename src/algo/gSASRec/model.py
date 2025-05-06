@@ -111,7 +111,8 @@ class SASRec(nn.Module):
         assert seq.max() <= self.item_num, f"Invalid token index: {seq.max()} exceeds embedding size"
         
         seq_emb = self.item_emb(seq) #* (self.hidden_units ** 0.5)
-        seq_emb = self.linear(seq_emb)  # Residual connection after embedding
+        seq_emb += self.linear(seq_emb)  # Residual connection
+
         if torch.isnan(seq_emb).any():
             print("\n=== NaN detected in seq_emb ===")
             print(seq_emb)
