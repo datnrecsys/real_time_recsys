@@ -107,7 +107,7 @@ class SASRecLitModule(L.LightningModule):
     #             self.log(f"param_max/{name}", p.data.abs().max(), prog_bar=False)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.lr, weight_decay=self.l2_emb)
+        optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr, weight_decay=self.l2_emb)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.3, patience=2)
         return {
             "optimizer": optimizer,
