@@ -44,6 +44,8 @@ class SASRec(nn.Module):
 
         # Item and Position Embeddings
         self.item_emb = nn.Embedding(item_num + 1, hidden_units, padding_idx=item_num)
+        # linear after embedding (resude connection)
+        self.linear = nn.Linear(hidden_units, hidden_units)
         self.pos_emb = nn.Embedding(self.seq_len, hidden_units)
         self.emb_dropout = nn.Dropout(dropout_rate)
 
@@ -106,6 +108,7 @@ class SASRec(nn.Module):
         assert seq.max() <= self.item_num, f"Invalid token index: {seq.max()} exceeds embedding size"
         
         seq_emb = self.item_emb(seq) #* (self.hidden_units ** 0.5)
+        seq_emb = self.linear(seq_emb)  # Residual connection after embedding
         if torch.isnan(seq_emb).any():
             print("\n=== NaN detected in seq_emb ===")
             print(seq_emb)
