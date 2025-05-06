@@ -71,7 +71,7 @@ class SASRecLitModule(L.LightningModule):
         # print(f"predictions: {predictions}")
         # print(f"labels: {labels}")
         loss = loss_fn(predictions, labels)
-        # print(f"Loss: {loss}")
+        print(f"Train Loss: {loss}")
 
         # https://lightning.ai/docs/pytorch/stable/visualize/logging_advanced.html#in-lightningmodule
         self.log("train_loss", loss, prog_bar=True, logger=True, sync_dist=True, on_epoch=True)
@@ -94,7 +94,7 @@ class SASRecLitModule(L.LightningModule):
         # print(f"predictions: {predictions}")        
         loss_fn = self._get_loss_fn()
         loss = loss_fn(predictions, labels)
-        # print(f"Loss: {loss}")
+        print(f"Val Loss: {loss}")
 
         # https://lightning.ai/docs/pytorch/stable/visualize/logging_advanced.html#in-lightningmodule
         self.log("val_loss", loss, prog_bar=True, logger=True, sync_dist=True, on_epoch=True)
@@ -124,11 +124,11 @@ class SASRecLitModule(L.LightningModule):
 
     def on_fit_end(self):
         self.model = self.model.to(self._get_device())
-        logger.info(f"Logging classification metrics...")
-        self._log_classification_metrics()
+        # logger.info(f"Logging classification metrics...")
+        # self._log_classification_metrics()
 
-        logger.info(f"Logging ranking metrics...")
-        self._log_ranking_metrics()
+        # logger.info(f"Logging ranking metrics...")
+        # self._log_ranking_metrics()
         
         logger.info(f"Evidently metrics are available at: {os.path.abspath(self.log_dir)}")
 
