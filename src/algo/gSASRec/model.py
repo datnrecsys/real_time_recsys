@@ -53,6 +53,9 @@ class SASRec(nn.Module):
         nn.init.xavier_normal_(self.item_emb.weight)  
         self.item_emb.weight.data[item_num].zero_()   
         nn.init.xavier_normal_(self.pos_emb.weight)
+        nn.init.xavier_normal_(self.linear.weight)
+        if self.linear.bias is not None:
+            nn.init.zeros_(self.linear.bias)
 
         # Transformer Blocks
         self.attention_layernorms = nn.ModuleList()
