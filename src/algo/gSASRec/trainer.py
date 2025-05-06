@@ -71,7 +71,7 @@ class SASRecLitModule(L.LightningModule):
         # print(f"predictions: {predictions}")
         # print(f"labels: {labels}")
         loss = loss_fn(predictions, labels)
-        print(f"Train Loss: {loss}")
+        # print(f"Train Loss: {loss}")
 
         # https://lightning.ai/docs/pytorch/stable/visualize/logging_advanced.html#in-lightningmodule
         self.log("train_loss", loss, prog_bar=True, logger=True, sync_dist=True, on_epoch=True)
@@ -108,7 +108,7 @@ class SASRecLitModule(L.LightningModule):
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr, weight_decay=self.l2_emb)
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.3, patience=2)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.2, patience=2)
         return {
             "optimizer": optimizer,
             "lr_scheduler": scheduler,
