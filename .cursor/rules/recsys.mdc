@@ -1,0 +1,51 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Cursor Rules for Sequential Recommendation Model
+
+# Language and Framework Specifics
+- Ensure your project uses Python as the primary language, along with libraries such as TensorFlow or PyTorch for model building.
+
+# Project Structure
+- Organize your project into the following directories:
+  - `data_for_ai/interim`: For storing datasets and any preprocessing scripts.
+  - `src/algo/`: For keeping model architecture and training scripts.
+  - `src/utils/`: For utility functions and helper scripts.
+  - `notebooks/`: For Jupyter notebooks used in experimentation.
+  - `notebooks/data/`: For storing model outputs, evaluation metrics, and logs.
+
+# Coding Standards
+- Follow PEP 8 guidelines for Python code to maintain readability.
+- Use type hints for function signatures to improve code clarity and facilitate debugging.
+- Write unit tests for all major functions and classes to ensure reliability.
+
+# Documentation
+- Document all functions and classes with docstrings, explaining their purpose and parameters.
+
+# Version Control
+- Use Git for version control and ensure all changes are committed with meaningful messages.
+- Create a `.gitignore` file to exclude unnecessary files and directories such as `__pycache__/`, `.vscode/`, and `*.pyc`.
+
+# Collaboration
+- If working in a team, use branches effectively for feature development and merge changes through pull requests for code review.
+
+# Experimentation
+- Keep track of different model architectures and hyperparameter settings using MLFlow
+
+# Data Handling
+- Ensure data is preprocessed consistently and manage train/validation/test splits effectively.
+- Handle missing data and outliers appropriately during preprocessing.
+
+# Model Training
+- Implement proper training loops with checkpoints to save model states.
+- Evaluate model performance using relevant metrics such as accuracy, precision, recall, and F1-score.
+
+# Deployment
+- Plan for model deployment by containerizing the application using Docker or similar tools.
+- Prepare an API interface for serving the model, possibly using Flask or FastAPI.
+
+# Security and Privacy
+- Ensure that any user data is handled in compliance with data protection regulations.
+

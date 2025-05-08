@@ -44,8 +44,6 @@ class SASRec(nn.Module):
 
         # Item and Position Embeddings
         self.item_emb = nn.Embedding(item_num + 1, hidden_units, padding_idx=item_num)
-        # linear after embedding (resude connection)
-        self.linear = nn.Linear(hidden_units, hidden_units)
         self.pos_emb = nn.Embedding(self.seq_len, hidden_units)
         self.emb_dropout = nn.Dropout(dropout_rate)
 
@@ -53,9 +51,6 @@ class SASRec(nn.Module):
         nn.init.xavier_normal_(self.item_emb.weight)  
         self.item_emb.weight.data[item_num].zero_()   
         nn.init.xavier_normal_(self.pos_emb.weight)
-        nn.init.xavier_normal_(self.linear.weight)
-        if self.linear.bias is not None:
-            nn.init.zeros_(self.linear.bias)
 
         # Transformer Blocks
         self.attention_layernorms = nn.ModuleList()
@@ -110,9 +105,7 @@ class SASRec(nn.Module):
     def forward(self, user_ids, seq, target_item):
         assert seq.max() <= self.item_num, f"Invalid token index: {seq.max()} exceeds embedding size"
         
-        seq_emb = self.item_emb(seq) #* (self.hidden_units ** 0.5)
-        skip_emb = self.linear(seq_emb)  # Residual connection
-        seq_emb = seq_emb + skip_emb
+        seq_emb = self.item_emb(seq) * (self.hidden_units ** 0.5)
 
         if torch.isnan(seq_emb).any():
             print("\n=== NaN detected in seq_emb ===")
