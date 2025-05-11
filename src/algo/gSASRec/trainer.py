@@ -105,6 +105,8 @@ class SASRecLitModule(L.LightningModule):
             if p.requires_grad and p.grad is not None:
                 self.log(f"grad_max/{name}", p.grad.abs().max(), prog_bar=False)
                 self.log(f"param_max/{name}", p.data.abs().max(), prog_bar=False)
+                self.log(f"param_mean/{name}", p.data.abs().mean(), prog_bar=False)
+                self.log(f"param_std/{name}", p.data.abs().std(), prog_bar=False)
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr, weight_decay=self.l2_emb)
@@ -128,7 +130,7 @@ class SASRecLitModule(L.LightningModule):
         # self._log_classification_metrics()
 
         # logger.info(f"Logging ranking metrics...")
-        # self._log_ranking_metrics()
+        self._log_ranking_metrics()
         
         logger.info(f"Evidently metrics are available at: {os.path.abspath(self.log_dir)}")
 

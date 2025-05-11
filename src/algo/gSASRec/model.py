@@ -34,13 +34,13 @@ class PointWiseFeedForward(nn.Module):
 
 
 class SASRec(nn.Module):
-    def __init__(self, user_num, item_num, hidden_units, dropout_rate, num_blocks, num_heads):
+    def __init__(self, user_num, item_num, hidden_units, dropout_rate, num_blocks, num_heads, sequence_length):
         super().__init__()
         self.user_num = user_num
         self.item_num = item_num
         self.hidden_units = hidden_units
         self.dropout_rate = dropout_rate
-        self.seq_len = 10  # Fixed sequence length
+        self.seq_len = sequence_length  # Fixed sequence length
 
         # Item and Position Embeddings
         self.item_emb = nn.Embedding(item_num + 1, hidden_units, padding_idx=item_num)
@@ -143,9 +143,6 @@ class SASRec(nn.Module):
         seq_emb = self.emb_dropout(seq_emb)
         
         mask = self.get_mask(seq)
-        
-        if mask.all(dim=1).any():
-            print("Warning: Some sequences have all keys masked (entire sequence is padding).")
         
         assert mask.dtype == torch.bool, "key_padding_mask must be boolean"
         causal_mask = torch.triu(torch.ones(self.seq_len, self.seq_len), diagonal=1).bool().to(seq.device)
