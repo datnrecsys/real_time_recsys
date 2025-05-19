@@ -15,8 +15,8 @@ class PointWiseFeedForward(nn.Module):
         self.conv2 = nn.Conv1d(hidden_units, hidden_units, kernel_size=1)
         self.dropout2 = nn.Dropout(dropout_rate)
 
-        nn.init.xavier_normal_(self.conv1.weight)
-        nn.init.xavier_normal_(self.conv2.weight)
+        nn.init.kaiming_normal_(self.conv1.weight)
+        nn.init.kaiming_normal_(self.conv2.weight)
 
     def forward(self, inputs):
         outputs = self.dropout1(self.prelu(self.conv1(inputs.transpose(-1, -2))))
@@ -107,36 +107,6 @@ class SASRec(nn.Module):
         assert seq.max() <= self.item_num, f"Invalid token index: {seq.max()} exceeds embedding size"
         
         seq_emb = self.item_emb(seq) * (self.hidden_units ** 0.5)
-
-        if torch.isnan(seq_emb).any():
-            print("\n=== NaN detected in seq_emb ===")
-            print(seq_emb)
-            print(seq_emb.shape)
-            
-            # Lấy thông tin batch có lỗi
-            nan_mask = torch.isnan(seq_emb)
-            batch_has_nan = nan_mask.any(dim=2).any(dim=1)
-            problematic_indices = torch.where(batch_has_nan)[0]
-            
-            print(f"Batch size: {seq.size(0)}, Seq length: {seq.size(1)}")
-            print(f"NaN detected in {len(problematic_indices)} sequences:")
-            
-            for idx in problematic_indices:
-                print(f"\n--- Problematic Sequence {idx.item()} ---")
-                print(f"User ID: {user_ids[idx].item()}")
-                print(f"Target Item: {target_item[idx].item()}")
-                print(f"Full Sequence: {seq[idx].tolist()}")
-                
-                # Tìm vị trí NaN cụ thể trong sequence
-                seq_nan_mask = nan_mask[idx].any(dim=1)
-                nan_positions = torch.where(seq_nan_mask)[0]
-                print(f"NaN at positions: {nan_positions.tolist()}")
-                
-                # Kiểm tra các giá trị gây NaN
-                problematic_items = seq[idx][seq_nan_mask]
-                print(f"Problematic item indices: {problematic_items.tolist()}")
-            
-            return None
                 
         # Add positional encoding
         positions = torch.arange(self.seq_len, device=seq.device).unsqueeze(0)
@@ -162,30 +132,6 @@ class SASRec(nn.Module):
                 attn_mask=causal_mask,
                 key_padding_mask=mask
             )
-            # lay thong tin batch co loi
-            if torch.isnan(attn_out).any():
-                print("\n=== NaN detected in attn_out ===")
-                print(attn_out)
-                print(attn_out.shape)
-                
-                # Lấy thông tin batch có lỗi
-                nan_mask = torch.isnan(attn_out)
-                batch_has_nan = nan_mask.any(dim=2).any(dim=1)
-                problematic_indices = torch.where(batch_has_nan)[0]
-                
-                print(f"Batch size: {seq.size(0)}, Seq length: {seq.size(1)}")
-                print(f"NaN detected in {len(problematic_indices)} sequences:")
-                
-                for idx in problematic_indices:
-                    print(f"\n--- Problematic Sequence {idx.item()} ---")
-                    print(f"User ID: {user_ids[idx].item()}")
-                    print(f"Target Item: {target_item[idx].item()}")
-                    print(f"Full Sequence: {seq[idx].tolist()}")
-                    
-                    # Tìm vị trí NaN cụ thể trong sequence
-                    seq_nan_mask = nan_mask[idx].any(dim=1)
-                    nan_positions = torch.where(seq_nan_mask)[0]
-                    print(f"NaN at positions: {nan_positions.tolist()}")
                     
             seq_emb = seq_emb + attn_out
             # FFN
