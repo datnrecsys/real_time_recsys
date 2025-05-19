@@ -61,7 +61,7 @@ class SASRec(nn.Module):
         
         for _ in range(num_blocks):
             # Attention
-            self.attention_layernorms.append(nn.LayerNorm(hidden_units, eps=1e-5))
+            self.attention_layernorms.append(nn.LayerNorm(hidden_units, eps=1e-8))
             self.attention_layers.append(nn.MultiheadAttention(
                 embed_dim=hidden_units,
                 num_heads=num_heads,
@@ -78,7 +78,7 @@ class SASRec(nn.Module):
                     nn.init.zeros_(param)  # Initialize bias to 0
             
             # FFN
-            self.forward_layernorms.append(nn.LayerNorm(hidden_units, eps=1e-5))
+            self.forward_layernorms.append(nn.LayerNorm(hidden_units, eps=1e-8))
             self.forward_layers.append(PointWiseFeedForward(hidden_units, dropout_rate))
 
         # Final layers
@@ -152,12 +152,12 @@ class SASRec(nn.Module):
         all_items = torch.arange(0, self.item_num, device=seqs.device)
         scores = []
         with torch.no_grad():
-            user_len_debug = 10
+            # user_len_debug = 10
             
             for i in range(len(users)):
                 # print(i)
-                if i == user_len_debug:
-                    break
+                # if i == user_len_debug:
+                #     break
                 seq = seqs[i].unsqueeze(0).repeat(self.item_num, 1)                
                 items = all_items#.unsqueeze(1)
                 user = users[i].repeat(self.item_num, 1).squeeze(1)
@@ -166,7 +166,7 @@ class SASRec(nn.Module):
         topk = torch.stack(scores).topk(k)
         
         return {
-            'user_indice': users[0:user_len_debug].cpu().numpy().tolist(), 
-            'recommendation': topk.indices[0:user_len_debug].cpu().numpy().tolist(), 
-            'score': topk.values[0:user_len_debug].cpu().numpy().tolist()  
+            'user_indice': users.cpu().numpy().tolist(), 
+            'recommendation': topk.indices.cpu().numpy().tolist(), 
+            'score': topk.values.cpu().numpy().tolist()  
         }
