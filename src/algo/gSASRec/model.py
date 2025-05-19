@@ -10,7 +10,7 @@ class PointWiseFeedForward(nn.Module):
         super().__init__()
         self.conv1 = nn.Conv1d(hidden_units, hidden_units, kernel_size=1)
         self.dropout1 = nn.Dropout(dropout_rate)
-        self.selu = nn.SELU()
+        self.relu6 = nn.ReLU6()
         self.prelu = nn.PReLU()
         self.conv2 = nn.Conv1d(hidden_units, hidden_units, kernel_size=1)
         self.dropout2 = nn.Dropout(dropout_rate)
@@ -19,8 +19,8 @@ class PointWiseFeedForward(nn.Module):
         nn.init.kaiming_normal_(self.conv2.weight)
 
     def forward(self, inputs):
-        outputs = self.dropout1(self.selu(self.conv1(inputs.transpose(-1, -2))))
-        outputs = self.dropout2(self.selu(self.conv2(outputs).transpose(-1, -2)))
+        outputs = self.dropout1(self.relu6(self.conv1(inputs.transpose(-1, -2))))
+        outputs = self.dropout2(self.relu6(self.conv2(outputs).transpose(-1, -2)))
         return outputs
 
         # x = inputs.transpose(-1, -2)         # [B, H, L]
