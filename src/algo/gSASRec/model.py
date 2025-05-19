@@ -11,6 +11,7 @@ class PointWiseFeedForward(nn.Module):
         self.conv1 = nn.Conv1d(hidden_units, hidden_units, kernel_size=1)
         self.dropout1 = nn.Dropout(dropout_rate)
         self.relu = nn.ReLU()
+        self.prelu = nn.PReLU()
         self.conv2 = nn.Conv1d(hidden_units, hidden_units, kernel_size=1)
         self.dropout2 = nn.Dropout(dropout_rate)
 
@@ -18,19 +19,19 @@ class PointWiseFeedForward(nn.Module):
         nn.init.xavier_normal_(self.conv2.weight)
 
     def forward(self, inputs):
-        # outputs = self.dropout1(self.relu(self.conv1(inputs.transpose(-1, -2))))
-        # outputs = self.dropout2(self.conv2(outputs).transpose(-1, -2))
-        # return outputs
+        outputs = self.dropout1(self.prelu(self.conv1(inputs.transpose(-1, -2))))
+        outputs = self.dropout2(self.prelu(self.conv2(outputs).transpose(-1, -2)))
+        return outputs
 
-        x = inputs.transpose(-1, -2)         # [B, H, L]
-        y = self.conv1(x)
-        y = self.relu(y)
-        z = self.dropout1(y)
+        # x = inputs.transpose(-1, -2)         # [B, H, L]
+        # y = self.conv1(x)
+        # y = self.relu(y)
+        # z = self.dropout1(y)
 
-        w = self.conv2(z)
-        w = w.transpose(-1, -2)
-        out = self.dropout2(w)
-        return out
+        # w = self.conv2(z)
+        # w = w.transpose(-1, -2)
+        # out = self.dropout2(w)
+        # return out
 
 
 class SASRec(nn.Module):
