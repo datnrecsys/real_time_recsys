@@ -19,8 +19,8 @@ class PointWiseFeedForward(nn.Module):
         nn.init.kaiming_normal_(self.conv2.weight)
 
     def forward(self, inputs):
-        outputs = self.dropout1(self.relu6(self.conv1(inputs.transpose(-1, -2))))
-        outputs = self.dropout2(self.relu6(self.conv2(outputs).transpose(-1, -2)))
+        outputs = self.dropout1(self.prelu(self.conv1(inputs.transpose(-1, -2))))
+        outputs = self.dropout2(self.prelu(self.conv2(outputs).transpose(-1, -2)))
         return outputs
 
         # x = inputs.transpose(-1, -2)         # [B, H, L]
