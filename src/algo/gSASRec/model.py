@@ -10,7 +10,6 @@ class PointWiseFeedForward(nn.Module):
         super().__init__()
         self.conv1 = nn.Conv1d(hidden_units, hidden_units, kernel_size=1)
         self.dropout1 = nn.Dropout(dropout_rate)
-        self.relu6 = nn.ReLU6()
         self.prelu = nn.PReLU()
         self.conv2 = nn.Conv1d(hidden_units, hidden_units, kernel_size=1)
         self.dropout2 = nn.Dropout(dropout_rate)
