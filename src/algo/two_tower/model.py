@@ -2,6 +2,7 @@ from typing import Any, Dict
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from tqdm.auto import tqdm
 
 from src.algo.two_tower.dataset import UserItemRatingDFDataset
@@ -24,13 +25,22 @@ class TwoTowerRating(nn.Module):
             dropout (float): Dropout rate for regularization.
         """
         super(TwoTowerRating, self).__init__()
-        self.user_embedding = nn.Embedding(num_users, embedding_dim)
+        
+        # Itemn tower
         self.item_embedding = nn.Embedding(num_items, embedding_dim)
-        self.user_fc = nn.Linear(embedding_dim, hidden_units_dim)
         self.item_fc = nn.Linear(embedding_dim, hidden_units_dim)
 
+        # User tower
+        self.user_embedding = nn.Embedding(num_users, embedding_dim)
+        self.user_fc = nn.Linear(embedding_dim, hidden_units_dim)
+        
+        # Logits
+        # self.output_fc = nn.Linear(hidden_units_dim *2, 1)  # (batch_size, hidden_units_dim) -> (batch_size, 1)
+        
+        # Activation and dropout layers
         self.relu = nn.ReLU()
         self.dropout = nn.Dropout(dropout)
+        self.sigmoid_fn = nn.Sigmoid()
 
     def forward(self, user: torch.Tensor, item: torch.Tensor) -> torch.Tensor:
         """
@@ -43,18 +53,64 @@ class TwoTowerRating(nn.Module):
         Returns:
             torch.Tensor: Predicted ratings.
         """
-        user_emb = self.user_embedding(user)   # (batch_size, embedding_dim)
-        item_emb = self.item_embedding(item)   # (batch_size, embedding_dim)
-
-        user_hidden_dim = self.user_fc(user_emb)   # (batch_size, hidden_units_dim)
-        item_hidden_dim = self.item_fc(item_emb)   # (batch_size, hidden_units_dim)
-
-        # Add relu activation to introduce non-linearity and dropout for regularization
-        user_hidden_dim = self.dropout(self.relu(user_hidden_dim))
-        item_hidden_dim = self.dropout(self.relu(item_hidden_dim))
+        # Query tower
+        query_emb = self._get_query_tower(user)  # (batch_size, hidden_units_dim)
+        # query_emb = F.normalize(query_emb, p=2, dim=-1)  # Normalize the user embedding
         
-        output = torch.sum(user_emb * item_emb, dim=-1) # (batch_size,)
+        # Candidate tower
+        candidate_emb = self._get_candidate_tower(item)  # (batch_size, hidden_units_dim)
+        # candidate_emb = F.normalize(candidate_emb, p=2, dim=-1)  # Normalize the item embedding
+        
+        # # Output layer
+        # combined = torch.cat([query_emb, candidate_emb], dim=-1)  # (batch_size, hidden_units_dim * 2)
+        # output = self.output_fc(combined)
+        
+        # Compute the dot product of user and item embeddings
+        # output = torch.sum(query_emb * candidate_emb, dim=-1)
+        output = F.cosine_similarity(query_emb, candidate_emb, dim=-1)  # (batch_size,)
+        # output = self.sigmoid_fn(output)  # Apply sigmoid activation to the output
+        # return (output+1)/2
         return output
+    
+    def _get_query_tower(self, user: torch.Tensor) -> torch.Tensor:
+        
+        """
+        Get the query tower output for a given user.
+
+        Args:
+            user (torch.Tensor): User indices. # (batch_size,)
+
+        Returns:
+            torch.Tensor: Query tower output.
+        """
+        user_emb = self.user_embedding(user) # (batch_size, embedding_dim)
+        
+        user_x = user_emb
+        
+        # user_x = self.user_fc(user_emb)   # (batch_size, hidden_units_dim)
+        # user_x = self.relu(user_x)   # (batch_size, hidden_units_dim)
+        # user_x = self.dropout(user_x)
+        return user_x
+    
+    def _get_candidate_tower(self, item: torch.Tensor) -> torch.Tensor:
+        """
+        Get the candidate tower output for a given item.
+
+        Args:
+            item (torch.Tensor): Item indices. # (batch_size,)
+
+        Returns:
+            torch.Tensor: Candidate tower output.
+        """
+        item_emb = self.item_embedding(item)
+        
+        item_x = item_emb
+        
+        # item_x = self.item_fc(item_emb)   # (batch_size, hidden_units_dim)
+        # item_x = self.relu(item_x)   # (batch_size, hidden_units_dim)
+        # item_x = self.dropout(item_x)
+        return item_x
+        
     
     def predict(self, users: torch.Tensor, items: torch.Tensor) -> torch.Tensor:
         """
@@ -68,25 +124,10 @@ class TwoTowerRating(nn.Module):
             torch.Tensor: Predicted interactions scores.
         """
         output_ratings = self.forward(users, items)
+        output_ratings = self.sigmoid_fn(output_ratings)  # Apply sigmoid activation to the output
 
-        return nn.Sigmoid()(output_ratings)
+        return output_ratings
     
-    def predict_train_batch(
-        self, batch_input: Dict[str, Any], device: torch.device = torch.device("cpu")
-    ) -> torch.Tensor:
-        """
-        Predict scores for a batch of training data.
-
-        Args:
-            batch_input (Dict[str, Any]): A dictionary containing tensors with 'user' and 'item' indices.
-            device (torch.device, optional): The device on which the model will run (CPU by default).
-
-        Returns:
-            torch.Tensor: The predicted scores for the batch.
-        """
-        users = batch_input["user"].to(device)
-        items = batch_input["item"].to(device)
-        return self.forward(users, items)
     
     def recommend(
             self, users: torch.Tensor, top_k: int = 10, batch_size: int = 1000

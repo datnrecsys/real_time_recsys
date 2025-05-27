@@ -8,8 +8,6 @@ from evidently.report import Report
 from evidently.metric_preset import ClassificationPreset
 
 from src.algo.two_tower.model import TwoTowerRating
-from src.algo.mf.dataset import UserItemRatingDFDataset
-from src.eval.log_metrics import log_ranking_metrics, log_classification_metrics
 from src.eval.utils import merge_recs_with_target, create_rec_df, create_label_df
 from evidently.metrics import (
     NDCGKMetric,
@@ -20,6 +18,7 @@ from evidently.metrics import (
 )
 from pydantic import BaseModel
 from loguru import logger
+from torchmetrics import AUROC, AveragePrecision
 
 class TwoTowerLitModule(L.LightningModule):
     def __init__(
@@ -36,6 +35,7 @@ class TwoTowerLitModule(L.LightningModule):
         top_K: int = 100,
         top_k: int = 10,
         accelerator: str = "cpu",
+        log_ranking_metrics: bool = False,
 
     ):
         super().__init__()
@@ -51,7 +51,15 @@ class TwoTowerLitModule(L.LightningModule):
         self.top_K = top_K 
         self.top_k = top_k
         self.accelerator = accelerator
-
+        self.log_ranking_metrics = log_ranking_metrics
+        self.val_roc_auc_metric = AUROC(task="binary")
+        self.val_pr_auc_metric = AveragePrecision(task="binary")
+        
+        if not self.idm:
+            logger.info(
+                "IDM is not provided. Skipping Evidently ranking metrics logging.")
+            self.log_ranking_metrics = False
+            
     def training_step(self, batch, batch_idx):
         if not isinstance(self.trainer.train_dataloader.dataset, self.model.get_default_dataset()):
             raise ValueError(
@@ -80,8 +88,13 @@ class TwoTowerLitModule(L.LightningModule):
         labels = batch["rating"].float()
 
         predictions = self.model.forward(input_user_ids, input_item_ids).view(labels.shape)
-        loss_fn = self._get_loss_fn()
-        loss = loss_fn(predictions, labels)
+        predictions = nn.Sigmoid()(predictions)
+        loss = nn.BCELoss()(predictions, labels)
+
+        # Update AUROC with current batch predictions and labels
+        self.val_roc_auc_metric.update(predictions, labels.int())
+        # Update PR-AUC with current batch predictions and labels
+        self.val_pr_auc_metric.update(predictions, labels.int())
 
         # https://lightning.ai/docs/pytorch/stable/visualize/logging_advanced.html#in-lightningmodule
         self.log("val_loss", loss, prog_bar=True, logger=True, sync_dist=True, on_epoch=True)
@@ -112,16 +125,41 @@ class TwoTowerLitModule(L.LightningModule):
         # Decay the learning rate if the validation loss has not improved
         if sch is not None:
             self.log("learning_rate", sch.get_last_lr()[0], sync_dist=True)
+            
+        # Compute and log the final ROC-AUC for the epoch
+        roc_auc = self.val_roc_auc_metric.compute()
+        pr_auc = self.val_pr_auc_metric.compute()
 
-    def on_fit_end(self):
-        self.model = self.model.to(self._get_device())
-        logger.info(f"Logging classification metrics...")
-        self._log_classification_metrics()
+        self.log(
+            "val_roc_auc",
+            roc_auc,
+            on_epoch=True,
+            prog_bar=True,
+            logger=True,
+            sync_dist=True,
+        )
+        self.log(
+            "val_pr_auc",
+            pr_auc,
+            on_epoch=True,
+            prog_bar=True,
+            logger=True,
+            sync_dist=True,
+        )
+
+        # Reset the metric for the next epoch
+        self.val_roc_auc_metric.reset()
+        self.val_pr_auc_metric.reset()
+
+    # def on_fit_end(self):
+    #     self.model = self.model.to(self._get_device())
+    #     logger.info("Logging classification metrics...")
+    #     self._log_classification_metrics()
         
-        logger.info(f"Logging ranking metrics...")
-        self._log_ranking_metrics()
+    #     logger.info("Logging ranking metrics...")
+    #     self._log_ranking_metrics()
 
-        logger.info(f"Evidently metrics are available at: {os.path.abspath(self.log_dir)}")
+    #     logger.info(f"Evidently metrics are available at: {os.path.abspath(self.log_dir)}")
 
 
     def _log_classification_metrics(
@@ -184,7 +222,7 @@ class TwoTowerLitModule(L.LightningModule):
                 metric = metric_result["metric"]
                 if metric == "ClassificationQualityMetric":
                     roc_auc = float(metric_result["result"]["current"]["roc_auc"])
-                    mlf_client.log_metric(run_id, f"val_roc_auc", roc_auc)
+                    mlf_client.log_metric(run_id, "val_roc_auc", roc_auc)
                     continue
                 if metric == "ClassificationPRTable":
                     columns = [
@@ -204,13 +242,13 @@ class TwoTowerLitModule(L.LightningModule):
                         recall = float(row["recall"])
                         mlf_client.log_metric(
                             run_id,
-                            f"val_precision_at_prob_as_threshold_step",
+                            "val_precision_at_prob_as_threshold_step",
                             precision,
                             step=prob,
                         )
                         mlf_client.log_metric(
                             run_id,
-                            f"val_recall_at_prob_as_threshold_step",
+                            "val_recall_at_prob_as_threshold_step",
                             recall,
                             step=prob,
                         )
@@ -323,7 +361,8 @@ class TwoTowerLitModule(L.LightningModule):
         Get the default loss function for the model.
         """
         #https://pytorch.org/docs/stable/generated/torch.nn.MSELoss.html
-        return nn.MSELoss()
+
+        return nn.BCEWithLogitsLoss(pos_weight=torch.tensor(4.0, device=self._get_device()))
     
     def _get_device(self):
         return self.accelerator

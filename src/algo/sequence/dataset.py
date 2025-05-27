@@ -35,7 +35,7 @@ class UserItemRatingDFDataset(Dataset):
             user=torch.as_tensor(user),
             item=torch.as_tensor(item),
             rating=torch.as_tensor(rating),
-            item_sequence=torch.as_tensor(item_sequence) if item_sequence is not None else None,
+            item_sequence=torch.as_tensor(item_sequence).int() if item_sequence is not None else None,
         )
 
     @classmethod
@@ -52,3 +52,20 @@ class UserItemRatingDFDataset(Dataset):
             loss_fn = cls.get_default_loss_fn()
         loss = loss_fn(predictions, ratings)
         return loss
+
+class UserItemBinaryRatingDFDataset(UserItemRatingDFDataset):
+    def __init__(
+        self,
+        df: pd.DataFrame,
+        user_col: str,
+        item_col: str,
+        rating_col: str,
+        timestamp_col: str,
+        item_seq_col: str = None
+    ):
+        self.df = df.assign(**{rating_col: df[rating_col].gt(0).astype(np.float32)})
+        self.user_col = user_col
+        self.item_col = item_col
+        self.rating_col = rating_col
+        self.timestamp_col = timestamp_col
+        self.item_seq_col = item_seq_col

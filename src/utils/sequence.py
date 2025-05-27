@@ -47,5 +47,4 @@ def generate_item_sequences(
         get_item_sequence
     )
     df["item_sequence"] = df["item_sequence"].fillna("").apply(list)
-
     return df

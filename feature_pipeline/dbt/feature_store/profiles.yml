@@ -1,0 +1,12 @@
+feature_store:
+  outputs:
+    dev:
+      dbname: amazon_rating
+      host: 138.2.61.6
+      pass: hehehe
+      port: 5432
+      schema: feature_store_offline
+      threads: 1
+      type: postgres
+      user: resys-user
+  target: dev

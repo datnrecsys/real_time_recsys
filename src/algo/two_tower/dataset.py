@@ -47,3 +47,19 @@ class UserItemRatingDFDataset(Dataset):
             loss_fn = cls.get_default_loss_fn()
         loss = loss_fn(predictions, ratings)
         return loss
+    
+class UserItemBinaryDFDataset(UserItemRatingDFDataset):
+    def __init__(
+        self,
+        df: pd.DataFrame,
+        user_col: str,
+        item_col: str,
+        rating_col: str,
+        timestamp_col: str,
+    ):
+        self.df = df.assign(**{rating_col: df[rating_col].gt(0).astype(np.float32)})
+        self.user_col = user_col
+        self.item_col = item_col
+        self.rating_col = rating_col
+        self.timestamp_col = timestamp_col
+

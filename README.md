@@ -40,3 +40,20 @@
     ```sh
     poetry run dvc pull
     ```
+
+6. DBT
+cd real_time_recsys/feature_pipeline/dbt/feature_store
+cat <<EOF > profiles.yml
+feature_store:
+  outputs:
+    dev:
+      dbname: $POSTGRES_DB
+      host: $POSTGRES_HOST
+      pass: $POSTGRES_PASSWORD
+      port: $POSTGRES_PORT
+      schema: $POSTGRES_FEATURE_STORE_OFFLINE_SCHEMA
+      threads: 1
+      type: postgres
+      user: $POSTGRES_USER
+  target: dev
+EOF

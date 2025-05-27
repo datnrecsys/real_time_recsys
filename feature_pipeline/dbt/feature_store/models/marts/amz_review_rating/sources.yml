@@ -1,0 +1,8 @@
+version: 2
+
+sources:
+  - name: amz_review_rating
+    database: amazon_rating
+    schema: oltp
+    tables:
+      - name: ratings   # Fact table that contains order history

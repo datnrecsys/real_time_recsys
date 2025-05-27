@@ -3,8 +3,8 @@ from typing import Any, Dict
 import torch
 import torch.nn as nn
 from tqdm.auto import tqdm
-# 
-from src.algo.sequence.dataset import UserItemRatingDFDataset
+from src.algo.sequence.dataset import UserItemBinaryRatingDFDataset
+from torch.nn import functional as F
 
 class SequenceRatingPrediction(nn.Module):
     """
@@ -41,34 +41,62 @@ class SequenceRatingPrediction(nn.Module):
         self.num_items = num_items
         self.num_users = num_users
 
-        self.item_embedding = item_embedding
-        if item_embedding is None:
-            # Item embedding (Add 1 to num_items for the unknown item (-1 padding))
-            self.item_embedding = nn.Embedding(
-                num_items + 1,  # One additional index for unknown/padding item
-                embedding_dim,
-                padding_idx=num_items,  # The additional index for the unknown item
-            )
+        # Item embedding (with padding index)
+        self.item_embedding = item_embedding or nn.Embedding(
+            num_items + 2,
+            embedding_dim,
+            padding_idx=num_items+1
+        )
 
         # User embedding
         self.user_embedding = nn.Embedding(num_users, embedding_dim)
 
         # GRU layer to process item sequences
-        self.gru = nn.GRU(
-            input_size=embedding_dim, hidden_size=embedding_dim, batch_first=True
+        # self.gru = nn.GRU(
+        #     input_size=embedding_dim,
+        #     hidden_size=embedding_dim,
+        #     batch_first=True
+        # )
+        self.encoder_layer = nn.TransformerEncoderLayer(
+            d_model=embedding_dim,
+            nhead=4,
+            dim_feedforward=embedding_dim,
+            batch_first=True,
+            dropout=dropout,
+            activation=nn.PReLU(),
+            layer_norm_eps=1e-5,
+        )
+        
+        self.encoder = nn.TransformerEncoder(
+            self.encoder_layer,
+            num_layers=1,
         )
 
-        self.relu = nn.ReLU()
+        # self.gelu = nn.ReLU()
+        self.prelu1 = nn.PReLU()
+        self.prelu2 = nn.PReLU()
         self.dropout = nn.Dropout(p=dropout)
+        
+        self.final_fc = nn.Linear(embedding_dim * 2, embedding_dim)
+        self.final_fc2 = nn.Linear(embedding_dim, embedding_dim // 2)
+        self.score_fc = nn.Linear(embedding_dim // 2, 1)
 
-        # Fully connected layer to map concatenated embeddings to rating prediction
-        self.fc_rating = nn.Sequential(
-            nn.Linear(embedding_dim * 3, embedding_dim),
-            nn.BatchNorm1d(embedding_dim),
-            self.relu,
-            self.dropout,
-            nn.Linear(embedding_dim, 1),
-        )
+        # Fully connected layers for rating prediction
+        # self.query_fc = nn.Sequential(
+        #     nn.Linear(embedding_dim, embedding_dim),
+        #     # self.gelu,
+        #     # nn.BatchNorm1d(embedding_dim),
+        #     self.gelu,
+        # )
+        
+        # self.candidate_fc = nn.Sequential(
+        #     nn.Linear(embedding_dim, embedding_dim ),
+        #     # nn.BatchNorm1d(embedding_dim),
+        #     self.gelu,
+        #     # self.gelu,
+            
+        # )
+        
 
     def forward(self, user_ids, input_seq, target_item):
         """
@@ -82,42 +110,80 @@ class SequenceRatingPrediction(nn.Module):
         Returns:
             torch.Tensor: Predicted rating for each user-item pair.
         """
+        
         # Replace -1 in input_seq and target_item with num_items (padding_idx)
         padding_idx_tensor = torch.tensor(self.item_embedding.padding_idx)
         input_seq = torch.where(input_seq == -1, padding_idx_tensor, input_seq)
         target_item = torch.where(target_item == -1, padding_idx_tensor, target_item)
+
+        input_seq = F.pad(input_seq, (0, 1), mode='constant', value=padding_idx_tensor - 1)
+
+
+        # print(input_seq.shape) #(batch_size, seq_len)
+        # print('hehe')
+        mask = (input_seq == padding_idx_tensor).float()
+        # print(mask)
+        # print(mask.shape) #(batch_size, seq_len)
 
         # Embed input sequence
         embedded_seq = self.item_embedding(
             input_seq
         )  # Shape: [batch_size, seq_len, embedding_dim]
 
-        # GRU processing: output the hidden states and the final hidden state
-        _, hidden_state = self.gru(
-            embedded_seq
-        )  # hidden_state: [1, batch_size, embedding_dim]
-        gru_output = hidden_state.squeeze(
-            0
-        )  # Remove the sequence dimension -> [batch_size, embedding_dim]
+        # # # # GRU processing: output the hidden states and the final hidden state
+        # # hidden_state = embedded_seq.mean(dim=1)  # Mean pooling over the sequence dimension
+        # _, hidden_state = self.gru(
+        #     embedded_seq
+        # )
+        # hidden_state = hidden_state.squeeze(
+        #     0
+        # )  # Remove the sequence dimension -> [batch_size, embedding_dim]
+        # # hidden_state = hidden_state.squeeze(0)
+        # # query_embedding = self.query_fc(hidden_state)  # Shape: [batch_size, embedding_dim]
+        # print("hehe")
+        hidden_state = self.encoder.forward(
+            src = embedded_seq,
+            src_key_padding_mask=mask,
+        ) # Shape: [batch_size, seq_len, embedding_dim]
+        # print("hehe")
+        # Get the last hidden state
+        hidden_state = hidden_state[:, -1, :]  # Shape: [batch_size, embedding_dim]
+        
+        # print(hidden_state.shape)
+
 
         # Embed the target item
         embedded_target = self.item_embedding(
             target_item
-        )  # Shape: [batch_size, embedding_dim]
+        )  # Shape: [batch_size, 1, embedding_dim]
+        # print(embedded_target)
+        # candidate_embedding = self.candidate_fc(embedded_target)  # Shape: [batch_size, embedding_dim]
 
-        # Embed the user IDs
-        user_embeddings = self.user_embedding(
-            user_ids
-        )  # Shape: [batch_size, embedding_dim]
-
-        # Concatenate the GRU output with the target item and user embeddings
-        combined_embedding = torch.cat(
-            (gru_output, embedded_target, user_embeddings), dim=1
-        )  # Shape: [batch_size, embedding_dim*3]
-
-        # Project combined embedding to rating prediction
-        output_ratings = self.fc_rating(combined_embedding)  # Shape: [batch_size, 1]
-
+        # query_embedding = F.normalize(hidden_state, p = 2, dim= -1)
+        # candidate_embedding = F.normalize(embedded_target, p = 2, dim= -1)
+        # score = torch.sum(
+        #     query_embedding * candidate_embedding, dim=-1
+        # )
+        final_embedding = torch.cat(
+            (hidden_state, embedded_target), dim=-1
+        )   # Shape: [batch_size, embedding_dim * 2]
+        
+        
+        final_embedding = self.final_fc(final_embedding) # Shape: [batch_size, embedding_dim]
+        final_embedding = self.prelu1(final_embedding)   # Shape: [batch_size, embedding_dim//2]
+        
+        final_embedding = self.final_fc2(final_embedding) # Shape: [batch_size, embedding_dim//2]
+        final_embedding = self.prelu2(final_embedding)   # Shape: [batch_size, embedding_dim//2]
+        
+        
+        # Apply sigmoid activation to the output
+        # output_ratings = nn.Sigmoid()(score)
+        # output_ratings = self.output_fc(
+        #     torch.cat((combined_embedding, embedded_target), dim=1)
+        # )
+        output_ratings = self.score_fc(final_embedding)
+        output_ratings = output_ratings.masked_fill(torch.isnan(output_ratings), 0)
+        # print(output_ratings) # Shape: [batch_size, 1]
         return output_ratings  # Shape: [batch_size]
 
     def predict(self, user, item_sequence, target_item):
@@ -134,28 +200,9 @@ class SequenceRatingPrediction(nn.Module):
             torch.Tensor: Predicted rating after applying Sigmoid activation.
         """
         output_rating = self.forward(user, item_sequence, target_item)
-        return nn.Sigmoid()(output_rating)
-
-    def predict_train_batch(
-        self, batch_input: dict, device: torch.device = torch.device("cpu")
-    ):
-        """
-        Predict ratings for a batch of users and item sequences during training.
-
-        Args:
-            batch_input (dict): Dictionary containing user IDs, item sequences, and target items.
-            device (torch.device, optional): The device to move the tensors to for prediction. Defaults to CPU.
-
-        Returns:
-            torch.Tensor: Predicted ratings for the batch.
-        """
-        user = batch_input["user"].to(device)
-        item_sequence = batch_input["item_sequence"].to(device)
-        target_item = batch_input["item"].to(device)
-
-        predictions = self.forward(user, item_sequence, target_item)
-
-        return predictions
+        # Apply sigmoid activation to the output
+        output_rating = nn.Sigmoid()(output_rating)
+        return output_rating
 
     @classmethod
     def get_default_dataset(cls):
@@ -165,7 +212,7 @@ class SequenceRatingPrediction(nn.Module):
         Returns:
             UserItemRatingDFDataset: The expected dataset type.
         """
-        return UserItemRatingDFDataset
+        return UserItemBinaryRatingDFDataset
 
     def recommend(
         self,
