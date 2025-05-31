@@ -94,7 +94,7 @@ class SASRecLitModule(L.LightningModule):
         # print(f"predictions: {predictions}")        
         loss_fn = self._get_loss_fn()
         loss = loss_fn(predictions, labels)
-        print(f"Val Loss: {loss}")
+        # print(f"Val Loss: {loss}")
 
         # https://lightning.ai/docs/pytorch/stable/visualize/logging_advanced.html#in-lightningmodule
         self.log("val_loss", loss, prog_bar=True, logger=True, sync_dist=True, on_epoch=True)

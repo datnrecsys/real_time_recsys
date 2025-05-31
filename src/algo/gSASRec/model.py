@@ -4,6 +4,8 @@ import torch
 import torch.nn as nn
 from tqdm.auto import tqdm
 from src.algo.gSASRec.dataset import SASRecDataset
+from src.utils.embedding_id_mapper import IDMapper
+from src.utils.load_pecanpy_embeddings import load_pecanpy_embeddings
 
 class PointWiseFeedForward(nn.Module):
     def __init__(self, hidden_units, dropout_rate):
@@ -22,34 +24,49 @@ class PointWiseFeedForward(nn.Module):
         outputs = self.dropout2(self.prelu(self.conv2(outputs).transpose(-1, -2)))
         return outputs
 
-        # x = inputs.transpose(-1, -2)         # [B, H, L]
-        # y = self.conv1(x)
-        # y = self.relu(y)
-        # z = self.dropout1(y)
-
-        # w = self.conv2(z)
-        # w = w.transpose(-1, -2)
-        # out = self.dropout2(w)
-        # return out
-
-
 class SASRec(nn.Module):
-    def __init__(self, user_num, item_num, hidden_units, dropout_rate, num_blocks, num_heads, sequence_length):
+    def __init__(
+        self,
+        user_num: int,
+        item_num: int,
+        hidden_units: int,
+        dropout_rate: float,
+        num_blocks: int,
+        num_heads: int,
+        sequence_length: int,
+        id_mapper: IDMapper,             # mapper ASIN→index
+        pretrained_emb_path: str = None  # đường dẫn file pecanpy .emb, nếu có
+    ):
         super().__init__()
-        self.user_num = user_num
-        self.item_num = item_num
+        self.user_num     = user_num
+        self.item_num     = item_num
         self.hidden_units = hidden_units
+        self.seq_len      = sequence_length
         self.dropout_rate = dropout_rate
-        self.seq_len = sequence_length  # Fixed sequence length
 
-        # Item and Position Embeddings
+        # Tạo embedding layer size = (item_num + 1) vì có padding index = item_num
         self.item_emb = nn.Embedding(item_num + 1, hidden_units, padding_idx=item_num)
-        self.pos_emb = nn.Embedding(self.seq_len, hidden_units)
-        self.emb_dropout = nn.Dropout(dropout_rate)
+        self.pos_emb  = nn.Embedding(self.seq_len, hidden_units)
+        self.emb_dropout = nn.Dropout(self.dropout_rate)
 
-        # Xavier initialization for embeddings
-        nn.init.xavier_normal_(self.item_emb.weight)  
-        self.item_emb.weight.data[item_num].zero_()   
+        if pretrained_emb_path is not None:
+            # Gọi hàm load_pecanpy_embeddings để đọc và map ASIN→index
+            pretrained_matrix = load_pecanpy_embeddings(
+                emb_path=pretrained_emb_path,
+                id_mapper=id_mapper,
+                item_num=item_num,
+                hidden_units=hidden_units,
+                padding_idx=item_num
+            )
+            # Copy trực tiếp vào weight.data (không tính gradient ở bước này)
+            with torch.no_grad():
+                self.item_emb.weight.data.copy_(pretrained_matrix)
+        else:
+            # Nếu không có pretrained path, vẫn init Xavier như cũ
+            nn.init.xavier_normal_(self.item_emb.weight)
+            # Và zero padding index
+            self.item_emb.weight.data[item_num].zero_()
+
         nn.init.xavier_normal_(self.pos_emb.weight)
 
         # Transformer Blocks
