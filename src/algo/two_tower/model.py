@@ -9,7 +9,7 @@ from src.algo.two_tower.dataset import UserItemRatingDFDataset
 
 class TwoTowerRating(nn.Module):
     """
-    A matrix factorization model for rating prediction using embeddings for users and items.
+    A two-tower model for rating prediction using embeddings for users and items.
     To predict ratings, the model computes the dot product of user and item embeddings.
     """
 

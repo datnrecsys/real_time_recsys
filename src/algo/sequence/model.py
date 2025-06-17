@@ -1,4 +1,4 @@
-from typing import Any, Dict
+from typing import Any, Dict, Optional, cast
 
 import torch
 import torch.nn as nn
@@ -33,7 +33,7 @@ class SequenceRatingPrediction(nn.Module):
         num_users,
         num_items,
         embedding_dim,
-        item_embedding=None,
+        item_embedding: Optional[torch.nn.Embedding] = None,
         dropout=0.2,
     ):
         super().__init__()
@@ -41,13 +41,16 @@ class SequenceRatingPrediction(nn.Module):
         self.num_items = num_items
         self.num_users = num_users
 
-        # Item embedding (with padding index)
-        self.item_embedding = item_embedding or nn.Embedding(
+        # Item embedding (with padding index and <start> index)
+        self.item_embedding = nn.Embedding(
             num_items + 2,
             embedding_dim,
             padding_idx=num_items+1
         )
-
+        
+        if item_embedding:
+            self.item_embedding.weight.data[:-2] = item_embedding.weight.data if item_embedding.num_embeddings == num_items else item_embedding.weight.data[:-1]
+            
         # User embedding
         self.user_embedding = nn.Embedding(num_users, embedding_dim)
 
@@ -112,16 +115,13 @@ class SequenceRatingPrediction(nn.Module):
         """
         
         # Replace -1 in input_seq and target_item with num_items (padding_idx)
-        padding_idx_tensor = torch.tensor(self.item_embedding.padding_idx)
-        input_seq = torch.where(input_seq == -1, padding_idx_tensor, input_seq)
-        target_item = torch.where(target_item == -1, padding_idx_tensor, target_item)
+        input_seq = self._replace_negative_one_with_padding_idx(input_seq)
+        target_item = self._replace_negative_one_with_padding_idx(target_item)
 
-        input_seq = F.pad(input_seq, (0, 1), mode='constant', value=padding_idx_tensor - 1)
+        # Pad start token at the beginning of the sequence
+        input_seq = F.pad(input_seq, (1, 0), mode='constant', value=self._get_item_start_token_idx())
 
-
-        # print(input_seq.shape) #(batch_size, seq_len)
-        # print('hehe')
-        mask = (input_seq == padding_idx_tensor).float()
+        mask = (input_seq == self._get_item_padding_token_idx()).float()
         # print(mask)
         # print(mask.shape) #(batch_size, seq_len)
 
@@ -182,9 +182,39 @@ class SequenceRatingPrediction(nn.Module):
         #     torch.cat((combined_embedding, embedded_target), dim=1)
         # )
         output_ratings = self.score_fc(final_embedding) 
+
+        output_ratings = cast(torch.tensor, output_ratings)
         output_ratings = output_ratings.masked_fill(torch.isnan(output_ratings), 0)
         # print(output_ratings) # Shape: [batch_size, 1]
         return output_ratings  # Shape: [batch_size]
+    
+    def _replace_negative_one_with_padding_idx(self, tensor: torch.Tensor) -> torch.Tensor:
+        # Replace -1 in input_seq and target_item with num_items (padding_idx)
+        padding_idx_tensor = torch.tensor(self.item_embedding.padding_idx)
+        new_tensor = torch.where(tensor == -1, padding_idx_tensor, tensor)
+        
+        return new_tensor
+    
+    @property
+    def _get_item_start_token_idx(self) -> int:
+        """
+        Get the ID of the start token used in the item embedding.
+
+        Returns:
+            int: The ID of the start token.
+        """
+        return self.item_embedding.num_embeddings - 2
+    
+    @property
+    def _get_item_padding_token_idx(self) -> int:
+        """
+        Get the ID of the padding token used in the item embedding.
+
+        Returns:
+            int: The ID of the padding token.
+        """
+        assert self.item_embedding.padding_idx == self.item_embedding.num_embeddings - 1, "Padding index should be the last index in the item embedding."
+        return self.item_embedding.padding_idx
 
     def predict(self, user, item_sequence, target_item):
         """

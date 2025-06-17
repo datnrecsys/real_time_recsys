@@ -35,7 +35,7 @@ def generate_item_sequences(
                 padding_needed = sequence_length - len(sequence)
                 sequence = np.pad(
                     sequence,
-                    (padding_needed, 0),  # Add padding at the beginning
+                    (0, padding_needed),  # Add padding at the end
                     "constant",
                     constant_values=padding_value,
                 )
