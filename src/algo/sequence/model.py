@@ -80,7 +80,7 @@ class SequenceRatingPrediction(nn.Module):
         self.prelu2 = nn.PReLU()
         self.dropout = nn.Dropout(p=dropout)
         
-        self.final_fc = nn.Linear(embedding_dim * 2, embedding_dim)
+        self.final_fc = nn.Linear(embedding_dim * 3, embedding_dim)
         self.final_fc2 = nn.Linear(embedding_dim, embedding_dim // 2)
         self.score_fc = nn.Linear(embedding_dim // 2, 1)
 
@@ -119,9 +119,9 @@ class SequenceRatingPrediction(nn.Module):
         target_item = self._replace_negative_one_with_padding_idx(target_item)
 
         # Pad start token at the beginning of the sequence
-        input_seq = F.pad(input_seq, (1, 0), mode='constant', value=self._get_item_start_token_idx())
+        input_seq = F.pad(input_seq, (1, 0), mode='constant', value=self._get_item_start_token_idx)
 
-        mask = (input_seq == self._get_item_padding_token_idx()).float()
+        mask = (input_seq == self._get_item_padding_token_idx).float()
         # print(mask)
         # print(mask.shape) #(batch_size, seq_len)
 
@@ -164,9 +164,12 @@ class SequenceRatingPrediction(nn.Module):
         # score = torch.sum(
         #     query_embedding * candidate_embedding, dim=-1
         # )
+        
+        embedded_user = self._get_user_tower(user_ids)  # Shape: [batch_size, embedding_dim]
+        
         final_embedding = torch.cat(
-            (hidden_state, embedded_target), dim=-1
-        )   # Shape: [batch_size, embedding_dim * 2]
+            (hidden_state, embedded_target, embedded_user), dim=-1
+        )   # Shape: [batch_size, embedding_dim * 3]
         
         
         final_embedding = self.final_fc(final_embedding) # Shape: [batch_size, embedding_dim]
@@ -215,6 +218,19 @@ class SequenceRatingPrediction(nn.Module):
         """
         assert self.item_embedding.padding_idx == self.item_embedding.num_embeddings - 1, "Padding index should be the last index in the item embedding."
         return self.item_embedding.padding_idx
+    
+    def _get_user_tower(self, user_idx: torch.Tensor) -> torch.Tensor:
+        """
+        Get the user tower output for a given user.
+
+        Args:
+            user (torch.Tensor): User indices. # (batch_size,)
+
+        Returns:
+            torch.Tensor: User tower output.
+        """
+        user_emb = self.user_embedding(user_idx)
+        return user_emb
 
     def predict(self, user, item_sequence, target_item):
         """
