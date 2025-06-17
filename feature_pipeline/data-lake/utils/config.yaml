@@ -1,0 +1,5 @@
+datalake:
+  bucket_name: amz_rating
+  rating_folder_name: rating_full
+  experiment_rating_folder_name: rating_experiment
+  parent_asin_metadata_folder_name: parent_asin_metadata

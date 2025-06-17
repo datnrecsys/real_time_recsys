@@ -1,5 +1,0 @@
-outs:
-- md5: aff5b84c9ecf8a0786800ffe2f538bd0
-  size: 7239263
-  hash: md5
-  path: train_sample_interactions_16407u_neg_seq.parquet

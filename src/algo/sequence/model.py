@@ -181,7 +181,7 @@ class SequenceRatingPrediction(nn.Module):
         # output_ratings = self.output_fc(
         #     torch.cat((combined_embedding, embedded_target), dim=1)
         # )
-        output_ratings = self.score_fc(final_embedding)
+        output_ratings = self.score_fc(final_embedding) 
         output_ratings = output_ratings.masked_fill(torch.isnan(output_ratings), 0)
         # print(output_ratings) # Shape: [batch_size, 1]
         return output_ratings  # Shape: [batch_size]
