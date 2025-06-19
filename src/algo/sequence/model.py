@@ -35,6 +35,8 @@ class SequenceRatingPrediction(nn.Module):
         embedding_dim,
         item_embedding: Optional[torch.nn.Embedding] = None,
         dropout=0.2,
+        use_user_embedding: bool = False,
+        use_start_token: bool = True,
     ):
         super().__init__()
 
@@ -42,17 +44,22 @@ class SequenceRatingPrediction(nn.Module):
         self.num_users = num_users
 
         # Item embedding (with padding index and <start> index)
-        self.item_embedding = nn.Embedding(
-            num_items + 2,
-            embedding_dim,
-            padding_idx=num_items+1
-        )
+        if use_start_token:
+            self.item_embedding = nn.Embedding(
+                num_items + 2,
+                embedding_dim,
+                padding_idx=num_items+1
+            )
+        else:
+            self.item_embedding = nn.Embedding(
+                num_items + 1,
+                embedding_dim,
+                padding_idx=num_items
+            )
         
         if item_embedding:
             self.item_embedding.weight.data[:-2] = item_embedding.weight.data if item_embedding.num_embeddings == num_items else item_embedding.weight.data[:-1]
             
-        # User embedding
-        self.user_embedding = nn.Embedding(num_users, embedding_dim)
 
         # GRU layer to process item sequences
         # self.gru = nn.GRU(
@@ -77,12 +84,20 @@ class SequenceRatingPrediction(nn.Module):
 
         # self.gelu = nn.ReLU()
         self.prelu1 = nn.PReLU()
-        self.prelu2 = nn.PReLU()
+        # self.prelu2 = nn.PReLU()
         self.dropout = nn.Dropout(p=dropout)
         
-        self.final_fc = nn.Linear(embedding_dim * 3, embedding_dim)
-        self.final_fc2 = nn.Linear(embedding_dim, embedding_dim // 2)
-        self.score_fc = nn.Linear(embedding_dim // 2, 1)
+        if use_user_embedding:
+            # User embedding
+            self.user_embedding = nn.Embedding(num_users, embedding_dim)
+            self.final_fc = nn.Linear(embedding_dim * 3, embedding_dim)
+        else:
+            self.final_fc = nn.Linear(embedding_dim * 2, embedding_dim)
+        # self.final_fc2 = nn.Linear(embedding_dim, embedding_dim // 2)
+        self.score_fc = nn.Linear(embedding_dim, 1)
+        
+        self._use_user_embedding = use_user_embedding
+        self._use_start_token = use_start_token
 
         # Fully connected layers for rating prediction
         # self.query_fc = nn.Sequential(
@@ -119,10 +134,12 @@ class SequenceRatingPrediction(nn.Module):
         target_item = self._replace_negative_one_with_padding_idx(target_item)
 
         # Pad start token at the beginning of the sequence
-        input_seq = F.pad(input_seq, (1, 0), mode='constant', value=self._get_item_start_token_idx)
+        if self._use_start_token:
+            input_seq = F.pad(input_seq, (1, 0), mode='constant', value=self._get_item_start_token_idx)
+        # print("input seq: ", input_seq)
 
         mask = (input_seq == self._get_item_padding_token_idx).float()
-        # print(mask)
+        # print("mask: ", mask)
         # print(mask.shape) #(batch_size, seq_len)
 
         # Embed input sequence
@@ -147,7 +164,7 @@ class SequenceRatingPrediction(nn.Module):
         ) # Shape: [batch_size, seq_len, embedding_dim]
         # print("hehe")
         # Get the last hidden state
-        hidden_state = hidden_state[:, -1, :]  # Shape: [batch_size, embedding_dim]
+        hidden_state = hidden_state[:, 0, :]  # Shape: [batch_size, embedding_dim]
         
         # print(hidden_state.shape)
 
@@ -165,18 +182,22 @@ class SequenceRatingPrediction(nn.Module):
         #     query_embedding * candidate_embedding, dim=-1
         # )
         
-        embedded_user = self._get_user_tower(user_ids)  # Shape: [batch_size, embedding_dim]
+        if self._use_user_embedding:
+            embedded_user = self._get_user_tower(user_ids)  # Shape: [batch_size, embedding_dim]
+        else:
+            embedded_user = torch.tensor([], device = self.item_embedding.weight.device)
         
         final_embedding = torch.cat(
             (hidden_state, embedded_target, embedded_user), dim=-1
         )   # Shape: [batch_size, embedding_dim * 3]
+        # print("final embedding: ", final_embedding.shape)
         
         
         final_embedding = self.final_fc(final_embedding) # Shape: [batch_size, embedding_dim]
         final_embedding = self.prelu1(final_embedding)   # Shape: [batch_size, embedding_dim//2]
         
-        final_embedding = self.final_fc2(final_embedding) # Shape: [batch_size, embedding_dim//2]
-        final_embedding = self.prelu2(final_embedding)   # Shape: [batch_size, embedding_dim//2]
+        # final_embedding = self.final_fc2(final_embedding) # Shape: [batch_size, embedding_dim//2]
+        # final_embedding = self.prelu2(final_embedding)   # Shape: [batch_size, embedding_dim//2]
         
         
         # Apply sigmoid activation to the output
@@ -187,6 +208,7 @@ class SequenceRatingPrediction(nn.Module):
         output_ratings = self.score_fc(final_embedding) 
 
         output_ratings = cast(torch.tensor, output_ratings)
+        # print("output ratings: ", output_ratings)
         output_ratings = output_ratings.masked_fill(torch.isnan(output_ratings), 0)
         # print(output_ratings) # Shape: [batch_size, 1]
         return output_ratings  # Shape: [batch_size]

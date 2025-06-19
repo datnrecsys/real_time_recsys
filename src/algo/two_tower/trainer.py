@@ -362,7 +362,7 @@ class TwoTowerLitModule(L.LightningModule):
         """
         #https://pytorch.org/docs/stable/generated/torch.nn.MSELoss.html
 
-        return nn.BCEWithLogitsLoss(pos_weight=torch.tensor(4.0, device=self._get_device()))
+        return nn.BCEWithLogitsLoss(pos_weight=torch.tensor(1.0, device=self._get_device()))
     
     def _get_device(self):
         return self.accelerator

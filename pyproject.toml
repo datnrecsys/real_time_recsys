@@ -46,6 +46,8 @@ accelerate = "^1.7.0"
 fastparquet = "^2024.11.0"
 minio = "^7.2.15"
 xgboost = "^3.0.2"
+pydantic-settings = "^2.9.1"
+pyspark = "^4.0.0"
 
 [tool.poetry.group.dev.dependencies]
 jupyterlab = "^4.2.4"
