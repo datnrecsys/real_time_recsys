@@ -1,4 +1,5 @@
-from typing import Any, Dict
+from typing import Any, Dict, Optional, cast
+from loguru import logger 
 
 import torch
 import torch.nn as nn
@@ -33,23 +34,33 @@ class SequenceRatingPrediction(nn.Module):
         num_users,
         num_items,
         embedding_dim,
-        item_embedding=None,
+        item_embedding: Optional[torch.nn.Embedding] = None,
         dropout=0.2,
+        use_user_embedding: bool = True,
+        use_start_token: bool = False,
     ):
         super().__init__()
 
         self.num_items = num_items
         self.num_users = num_users
 
-        # Item embedding (with padding index)
-        self.item_embedding = item_embedding or nn.Embedding(
-            num_items + 2,
-            embedding_dim,
-            padding_idx=num_items+1
-        )
-
-        # User embedding
-        self.user_embedding = nn.Embedding(num_users, embedding_dim)
+        # Item embedding (with padding index and <start> index)
+        if use_start_token:
+            self.item_embedding = nn.Embedding(
+                num_items + 2,
+                embedding_dim,
+                padding_idx=num_items+1
+            )
+        else:
+            self.item_embedding = nn.Embedding(
+                num_items + 1,
+                embedding_dim,
+                padding_idx=num_items
+            )
+        
+        if item_embedding:
+            self.item_embedding.weight.data[:-2] = item_embedding.weight.data if item_embedding.num_embeddings == num_items else item_embedding.weight.data[:-1]
+            
 
         # GRU layer to process item sequences
         # self.gru = nn.GRU(
@@ -74,12 +85,20 @@ class SequenceRatingPrediction(nn.Module):
 
         # self.gelu = nn.ReLU()
         self.prelu1 = nn.PReLU()
-        self.prelu2 = nn.PReLU()
+        # self.prelu2 = nn.PReLU()
         self.dropout = nn.Dropout(p=dropout)
         
-        self.final_fc = nn.Linear(embedding_dim * 2, embedding_dim)
-        self.final_fc2 = nn.Linear(embedding_dim, embedding_dim // 2)
-        self.score_fc = nn.Linear(embedding_dim // 2, 1)
+        if use_user_embedding:
+            # User embedding
+            self.user_embedding = nn.Embedding(num_users, embedding_dim)
+            self.final_fc = nn.Linear(embedding_dim * 3, embedding_dim)
+        else:
+            self.final_fc = nn.Linear(embedding_dim * 2, embedding_dim)
+        # self.final_fc2 = nn.Linear(embedding_dim, embedding_dim // 2)
+        self.score_fc = nn.Linear(embedding_dim, 1)
+        
+        self._use_user_embedding = use_user_embedding
+        self._use_start_token = use_start_token
 
         # Fully connected layers for rating prediction
         # self.query_fc = nn.Sequential(
@@ -96,6 +115,8 @@ class SequenceRatingPrediction(nn.Module):
         #     # self.gelu,
             
         # )
+        logger.info(f"Start token used: {self._get_item_start_token_idx}"
+                    f", Padding token used: {self._get_item_padding_token_idx}")
         
 
     def forward(self, user_ids, input_seq, target_item):
@@ -112,17 +133,16 @@ class SequenceRatingPrediction(nn.Module):
         """
         
         # Replace -1 in input_seq and target_item with num_items (padding_idx)
-        padding_idx_tensor = torch.tensor(self.item_embedding.padding_idx)
-        input_seq = torch.where(input_seq == -1, padding_idx_tensor, input_seq)
-        target_item = torch.where(target_item == -1, padding_idx_tensor, target_item)
+        input_seq = self._replace_negative_one_with_padding_idx(input_seq)
+        target_item = self._replace_negative_one_with_padding_idx(target_item)
 
-        input_seq = F.pad(input_seq, (0, 1), mode='constant', value=padding_idx_tensor - 1)
+        # Pad start token at the beginning of the sequence
+        if self._use_start_token:
+            input_seq = F.pad(input_seq, (0, 1), mode='constant', value=self._get_item_start_token_idx)
+        # print("input seq: ", input_seq)
 
-
-        # print(input_seq.shape) #(batch_size, seq_len)
-        # print('hehe')
-        mask = (input_seq == padding_idx_tensor).float()
-        # print(mask)
+        mask = (input_seq == self._get_item_padding_token_idx).float()
+        # print("mask: ", mask)
         # print(mask.shape) #(batch_size, seq_len)
 
         # Embed input sequence
@@ -164,16 +184,23 @@ class SequenceRatingPrediction(nn.Module):
         # score = torch.sum(
         #     query_embedding * candidate_embedding, dim=-1
         # )
+        
+        if self._use_user_embedding:
+            embedded_user = self._get_user_tower(user_ids)  # Shape: [batch_size, embedding_dim]
+        else:
+            embedded_user = torch.tensor([], device = self.item_embedding.weight.device)
+        
         final_embedding = torch.cat(
-            (hidden_state, embedded_target), dim=-1
-        )   # Shape: [batch_size, embedding_dim * 2]
+            (hidden_state, embedded_target, embedded_user), dim=-1
+        )   # Shape: [batch_size, embedding_dim * 3]
+        # print("final embedding: ", final_embedding.shape)
         
         
         final_embedding = self.final_fc(final_embedding) # Shape: [batch_size, embedding_dim]
         final_embedding = self.prelu1(final_embedding)   # Shape: [batch_size, embedding_dim//2]
         
-        final_embedding = self.final_fc2(final_embedding) # Shape: [batch_size, embedding_dim//2]
-        final_embedding = self.prelu2(final_embedding)   # Shape: [batch_size, embedding_dim//2]
+        # final_embedding = self.final_fc2(final_embedding) # Shape: [batch_size, embedding_dim//2]
+        # final_embedding = self.prelu2(final_embedding)   # Shape: [batch_size, embedding_dim//2]
         
         
         # Apply sigmoid activation to the output
@@ -182,9 +209,53 @@ class SequenceRatingPrediction(nn.Module):
         #     torch.cat((combined_embedding, embedded_target), dim=1)
         # )
         output_ratings = self.score_fc(final_embedding) 
+
+        output_ratings = cast(torch.tensor, output_ratings)
+        # print("output ratings: ", output_ratings)
         output_ratings = output_ratings.masked_fill(torch.isnan(output_ratings), 0)
         # print(output_ratings) # Shape: [batch_size, 1]
         return output_ratings  # Shape: [batch_size]
+    
+    def _replace_negative_one_with_padding_idx(self, tensor: torch.Tensor) -> torch.Tensor:
+        # Replace -1 in input_seq and target_item with num_items (padding_idx)
+        padding_idx_tensor = torch.tensor(self.item_embedding.padding_idx)
+        new_tensor = torch.where(tensor == -1, padding_idx_tensor, tensor)
+        
+        return new_tensor
+    
+    @property
+    def _get_item_start_token_idx(self) -> int:
+        """
+        Get the ID of the start token used in the item embedding.
+
+        Returns:
+            int: The ID of the start token.
+        """
+        return self.item_embedding.num_embeddings - 2
+    
+    @property
+    def _get_item_padding_token_idx(self) -> int:
+        """
+        Get the ID of the padding token used in the item embedding.
+
+        Returns:
+            int: The ID of the padding token.
+        """
+        assert self.item_embedding.padding_idx == self.item_embedding.num_embeddings - 1, "Padding index should be the last index in the item embedding."
+        return self.item_embedding.padding_idx
+    
+    def _get_user_tower(self, user_idx: torch.Tensor) -> torch.Tensor:
+        """
+        Get the user tower output for a given user.
+
+        Args:
+            user (torch.Tensor): User indices. # (batch_size,)
+
+        Returns:
+            torch.Tensor: User tower output.
+        """
+        user_emb = self.user_embedding(user_idx)
+        return user_emb
 
     def predict(self, user, item_sequence, target_item):
         """

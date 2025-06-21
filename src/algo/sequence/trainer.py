@@ -63,7 +63,7 @@ class SeqModellingLitModule(L.LightningModule):
         
         input_user_ids = batch["user"]
         input_item_ids = batch["item"]
-        input_item_sequences = batch["item_sequence"]
+        input_item_sequences = batch["item_sequence"].int()
 
         labels = batch["rating"].float()
         
@@ -395,7 +395,7 @@ class SeqModellingLitModule(L.LightningModule):
         Get the default loss function for the model.
         """
         #https://pytorch.org/docs/stable/generated/torch.nn.MSELoss.html
-        return nn.BCEWithLogitsLoss(pos_weight= torch.tensor(1.0, device=self._get_device()))
+        return nn.BCEWithLogitsLoss(pos_weight= torch.tensor(2.0, device=self._get_device()))
 
     # def _get_loss_fn(self):
     #     """
