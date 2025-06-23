@@ -3,6 +3,6 @@ version: 2
 sources:
   - name: amz_review_rating
     database: amazon_rating
-    schema: oltp
+    schema: experimental
     tables:
-      - name: ratings   # Fact table that contains order history
+      - name: amz_rating   # Fact table that contains order history

@@ -7,7 +7,7 @@ select
   -- Prevent duplicated rows due to possibly unexpected ingestion error
   distinct *
 from
-  {{ source('amz_review_rating', 'ratings') }}
+  {{ source('amz_review_rating', 'amz_rating') }}
 )
 
 , raw_agg as (

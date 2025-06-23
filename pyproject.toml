@@ -23,15 +23,12 @@ acryl-datahub = "^0.14.1.12"
 evidently = "^0.4.40"
 sqlalchemy = "^2.0.36"
 psycopg2 = "^2.9.10"
-feast = {extras = ["postgres", "redis"], version = "^0.47.0"}
 lightning = "^2.5.1"
 qdrant-client = {extras = ["fastembed"], version = "^1.13.2"}
 redis = "^4.5.6"
 bentoml = "^1.3.21"
 python-multipart = "^0.0.20"
 litestar = "^2.14.0"
-dbt-core = "1.8.5"
-dbt-postgres = "1.8.2"
 langgraph = "^0.3.2"
 langsmith = "^0.3.11"
 langchain-anthropic = "^0.3.8"
@@ -63,6 +60,13 @@ tensorboard = "^2.18.0"
 # name = "pytorch_cpu"
 # url = "https://download.pytorch.org/whl/cpu"
 # priority = "explicit"
+
+[tool.poetry.group.feature-pipeline.dependencies]
+feast = "^0.49.0"
+psycopg2 = "^2.9.10"
+dbt-core = "^1.10.2"
+dbt-postgres = "^1.9.0"
+
 [[tool.poetry.source]]
 name     = "pytorch"
 url      = "https://download.pytorch.org/whl/cu124"
