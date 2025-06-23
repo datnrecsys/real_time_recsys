@@ -385,7 +385,7 @@ class SeqModellingLitModule(L.LightningModule):
         Get the default loss function for the model.
         """
         #https://pytorch.org/docs/stable/generated/torch.nn.MSELoss.html
-        return nn.BCEWithLogitsLoss(pos_weight= torch.tensor(2.0, device=self._get_device()))
+        return nn.BCEWithLogitsLoss(pos_weight= torch.tensor(1.0, device=self._get_device()))
 
     # def _get_loss_fn(self):
     #     """
