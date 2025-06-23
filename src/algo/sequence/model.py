@@ -45,6 +45,9 @@ class SequenceRatingPrediction(nn.Module):
         self.num_users = num_users
 
         # Item embedding (with padding index and <start> index)
+        # The last index is reserved for padding, and the second last for start token
+        # If use_start_token is True, the last two indices are reserved for start and padding tokens
+        # If use_start_token is False, only the last index is reserved for padding token
         if use_start_token:
             self.item_embedding = nn.Embedding(
                 num_items + 2,
@@ -57,9 +60,12 @@ class SequenceRatingPrediction(nn.Module):
                 embedding_dim,
                 padding_idx=num_items
             )
+            # if item_embedding is not None
+            if item_embedding is not None and item_embedding.num_embeddings == num_items + 1:
+                self.item_embedding.weight.data = item_embedding.weight.data[:-1] 
         
-        if item_embedding:
-            self.item_embedding.weight.data[:-2] = item_embedding.weight.data if item_embedding.num_embeddings == num_items else item_embedding.weight.data[:-1]
+        # if item_embedding:
+        #     self.item_embedding.weight.data[:-2] = item_embedding.weight.data if item_embedding.num_embeddings == num_items else item_embedding.weight.data[:-1]
             
 
         # GRU layer to process item sequences

@@ -6,9 +6,9 @@ import pandas as pd
 import torch
 
 import mlflow
-from src.ann import AnnIndex
-from src.features.timestamp_bucket import from_ts_to_bucket
-from src.id_mapper import IDMapper
+# from src.ann import AnnIndex
+from src.algo.ranker.utils import from_ts_to_bucket
+from src.utils.embedding_id_mapper import IDMapper
 
 
 class RankerInferenceWrapper(mlflow.pyfunc.PythonModel):
@@ -30,9 +30,9 @@ class RankerInferenceWrapper(mlflow.pyfunc.PythonModel):
                 raise Exception(f"Environment variable QDRANT_HOST is not set.")
             qdrant_port = os.getenv("QDRANT_PORT")
             qdrant_url = f"{qdrant_host}:{qdrant_port}"
-            self.ann_index = AnnIndex(
-                qdrant_url=qdrant_url, qdrant_collection_name="item_desc_sbert"
-            )
+            # self.ann_index = AnnIndex(
+            #     qdrant_url=qdrant_url, qdrant_collection_name="item_desc_sbert"
+            # )
 
         item_metadata_pipeline_fp = context.artifacts["item_metadata_pipeline"]
         with open(item_metadata_pipeline_fp, "rb") as f:

@@ -63,25 +63,14 @@ class SeqModellingLitModule(L.LightningModule):
         
         input_user_ids = batch["user"]
         input_item_ids = batch["item"]
-        input_item_sequences = batch["item_sequence"].int()
+        input_item_sequences = batch["item_sequence"]
 
         labels = batch["rating"].float()
-        
-        predictions = self.model.forward(input_user_ids, input_item_sequences, input_item_ids).view(labels.shape)
-        # print(predictions)
 
+        predictions = self.model.forward(input_user_ids, input_item_sequences, input_item_ids, target_metadata=input_item_ids).view(labels.shape)
         loss_fn = self._get_loss_fn()
-
-
-        # print(predictions)
-        # print(labels)
-
         loss = loss_fn(predictions, labels)
-        # print(loss)
-
-        # https://lightning.ai/docs/pytorch/stable/visualize/logging_advanced.html#in-lightningmodule
         self.log("train_loss", loss, prog_bar=True, logger=True, sync_dist=True, on_epoch=True)
-
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -92,7 +81,7 @@ class SeqModellingLitModule(L.LightningModule):
 
         labels = batch["rating"].float()
 
-        predictions = self.model.forward(input_user_ids, input_item_sequences, input_item_ids).view(labels.shape)
+        predictions = self.model.forward(input_user_ids, input_item_sequences, input_item_ids, target_metadata=input_item_ids).view(labels.shape)
         predictions = nn.Sigmoid()(predictions)
         loss_fn = nn.BCELoss()
         loss = loss_fn(predictions, labels)
@@ -210,8 +199,9 @@ class SeqModellingLitModule(L.LightningModule):
             _input_item_ids = batch_input["item"].to(self._get_device())
             _input_item_seq_ids = batch_input["item_sequence"].int().to(self._get_device())
             _labels = batch_input["rating"].to(self._get_device())
+  
             _classifications = self.model.predict(
-                _input_user_ids, _input_item_seq_ids, _input_item_ids
+                _input_user_ids, _input_item_seq_ids, _input_item_ids, target_metadata=_input_item_ids
             ).view(_labels.shape)
 
             labels.extend(_labels.cpu().detach().numpy())
