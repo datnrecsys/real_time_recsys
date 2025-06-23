@@ -62,7 +62,7 @@ tensorboard = "^2.18.0"
 # priority = "explicit"
 
 [tool.poetry.group.feature-pipeline.dependencies]
-feast = "^0.49.0"
+feast = {extras = ["postgres"], version = "^0.49.0"}
 psycopg2 = "^2.9.10"
 dbt-core = "^1.10.2"
 dbt-postgres = "^1.9.0"
