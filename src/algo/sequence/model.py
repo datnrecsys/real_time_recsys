@@ -54,19 +54,19 @@ class SequenceRatingPrediction(nn.Module):
                 embedding_dim,
                 padding_idx=num_items+1
             )
+            
+
         else:
             self.item_embedding = nn.Embedding(
                 num_items + 1,
                 embedding_dim,
                 padding_idx=num_items
             )
-            # if item_embedding is not None
-            if item_embedding is not None and item_embedding.num_embeddings == num_items + 1:
-                self.item_embedding.weight.data = item_embedding.weight.data[:-1] 
         
-        # if item_embedding:
-        #     self.item_embedding.weight.data[:-2] = item_embedding.weight.data if item_embedding.num_embeddings == num_items else item_embedding.weight.data[:-1]
-            
+        # if item_embedding is not None, assign the fisrt num_items weights to the item_embedding
+        # no need to assign the last two weights, as they are reserved for start and padding tokens   
+        if item_embedding is not None:
+            self.item_embedding.weight.data[:num_items] = item_embedding.weight.data
 
         # GRU layer to process item sequences
         # self.gru = nn.GRU(
