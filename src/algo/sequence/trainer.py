@@ -67,7 +67,7 @@ class SeqModellingLitModule(L.LightningModule):
 
         labels = batch["rating"].float()
 
-        predictions = self.model.forward(input_user_ids, input_item_sequences, input_item_ids).view(labels.shape)
+        predictions = self.model.forward(input_user_ids, input_item_sequences, input_item_ids, target_metadata=input_item_ids).view(labels.shape)
         loss_fn = self._get_loss_fn()
         loss = loss_fn(predictions, labels)
         self.log("train_loss", loss, prog_bar=True, logger=True, sync_dist=True, on_epoch=True)
@@ -81,7 +81,7 @@ class SeqModellingLitModule(L.LightningModule):
 
         labels = batch["rating"].float()
 
-        predictions = self.model.forward(input_user_ids, input_item_sequences, input_item_ids).view(labels.shape)
+        predictions = self.model.forward(input_user_ids, input_item_sequences, input_item_ids,target_metadata=input_item_ids).view(labels.shape)
         predictions = nn.Sigmoid()(predictions)
         loss_fn = nn.BCELoss()
         loss = loss_fn(predictions, labels)
@@ -201,7 +201,7 @@ class SeqModellingLitModule(L.LightningModule):
             _labels = batch_input["rating"].to(self._get_device())
   
             _classifications = self.model.predict(
-                _input_user_ids, _input_item_seq_ids, _input_item_ids
+                _input_user_ids, _input_item_seq_ids, _input_item_ids, target_metadata=_input_item_ids
             ).view(_labels.shape)
 
             labels.extend(_labels.cpu().detach().numpy())

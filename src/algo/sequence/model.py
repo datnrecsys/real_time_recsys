@@ -39,10 +39,10 @@ class SequenceRatingPrediction(nn.Module):
         use_user_embedding: bool = True,
         use_start_token: bool = False,
         user_embedding_dim: Optional[int] = None,
-        # use_metadata: bool = False,
-        # metadata_embedding: Optional[torch.nn.Embedding] = None,
-        # metadata_embedding_dim= Optional[int],
-        # metadata_fc_dim: Optional[int] = None,
+        use_metadata: bool = False,
+        metadata_embedding: Optional[torch.nn.Embedding] = None,
+        metadata_embedding_dim= Optional[int],
+        metadata_fc_dim: Optional[int] = None,
     ):
         super().__init__()
 
@@ -60,7 +60,6 @@ class SequenceRatingPrediction(nn.Module):
                 padding_idx=num_items+1
             )
             
-
         else:
             self.item_embedding = nn.Embedding(
                 num_items + 1,
@@ -98,15 +97,30 @@ class SequenceRatingPrediction(nn.Module):
         self.prelu1 = nn.PReLU()
         # self.prelu2 = nn.PReLU()
         self.dropout = nn.Dropout(p=dropout)
+
+        # Metadata embedding
+        self.metadata_embedding = metadata_embedding
+        self.metadata_embedding_dim = metadata_embedding_dim
+        self.metadata_fc_dim = metadata_fc_dim
+        if self.metadata_embedding is not None:
+            self.metadata_fc = nn.Linear(metadata_embedding_dim, metadata_fc_dim)
+            self.metadata_prelu = nn.PReLU()
+            item_tower_dim = embedding_dim + metadata_fc_dim
+        else:
+            item_tower_dim = embedding_dim
+        self.item_tower_fc = nn.Linear(item_tower_dim, embedding_dim)
         
+
         if use_user_embedding:
             # User embedding
             assert user_embedding_dim is not None, "user_embedding_dim must be provided if use_user_embedding is True"
             self.user_embedding = nn.Embedding(num_users, user_embedding_dim)
-            self.final_fc = nn.Linear(embedding_dim * 2 + user_embedding_dim, embedding_dim)
+            user_embedding_dim = user_embedding_dim + embedding_dim 
         else:
-            self.final_fc = nn.Linear(embedding_dim * 2, embedding_dim)
-        # self.final_fc2 = nn.Linear(embedding_dim, embedding_dim // 2)
+            user_embedding_dim = embedding_dim
+        self.user_tower_fc = nn.Linear(user_embedding_dim, embedding_dim)
+        
+        self.final_fc = nn.Linear(embedding_dim * 2, embedding_dim)
         self.score_fc = nn.Linear(embedding_dim, 1)
         
         self._use_user_embedding = use_user_embedding
@@ -131,7 +145,7 @@ class SequenceRatingPrediction(nn.Module):
                     f", Padding token used: {self._get_item_padding_token_idx}")
         
 
-    def forward(self, user_ids, input_seq, target_item):
+    def forward(self, user_ids, input_seq, target_item, target_metadata=None):
         """
         Forward pass to predict the rating.
 
@@ -196,19 +210,35 @@ class SequenceRatingPrediction(nn.Module):
         # score = torch.sum(
         #     query_embedding * candidate_embedding, dim=-1
         # )
-        
         if self._use_user_embedding:
             embedded_user = self._get_user_tower(user_ids)  # Shape: [batch_size, user_embedding_dim]
         else:
             embedded_user = torch.tensor([], device = self.item_embedding.weight.device)
+
+        # Concatenate the hidden state, embedded user for USER TOWER
+        user_tower_embedding = torch.cat(
+            (hidden_state, embedded_user), dim=-1)
+        user_tower_embedding = self.user_tower_fc(user_tower_embedding)  # Shape: [batch_size, embedding_dim]
+        # Concatenate the embedded target, embedded metadata for ITEM TOWER
+
+        if self.metadata_embedding is not None and target_metadata is not None: 
+            embedded_metadata = self.metadata_embedding(target_metadata)
+            embedded_metadata = self.metadata_fc(embedded_metadata)
+            embedded_metadata = self.metadata_prelu(embedded_metadata)
+            item_tower_embedding = torch.cat(
+                (embedded_target, embedded_metadata), dim=-1
+            )
+            item_tower_embedding = self.item_tower_fc(item_tower_embedding)  # Shape: [batch_size, embedding_dim]
+
+        else:
+            item_tower_embedding = embedded_target
+            item_tower_embedding = self.item_tower_fc(item_tower_embedding)  # Shape: [batch_size, embedding_dim]
+        # Combine the user tower and item tower embeddings
+        combined_embedding = torch.cat(
+            (user_tower_embedding, item_tower_embedding), dim=-1)  # Shape: [batch_size, embedding_dim * 2]
         
-        final_embedding = torch.cat(
-            (hidden_state, embedded_target, embedded_user), dim=-1
-        )   # Shape: [batch_size, embedding_dim * 3]
-        # print("final embedding: ", final_embedding.shape)
         
-        
-        final_embedding = self.final_fc(final_embedding) # Shape: [batch_size, embedding_dim]
+        final_embedding = self.final_fc(combined_embedding) # Shape: [batch_size, embedding_dim]
         final_embedding = self.prelu1(final_embedding)   # Shape: [batch_size, embedding_dim//2]
         
         # final_embedding = self.final_fc2(final_embedding) # Shape: [batch_size, embedding_dim//2]
@@ -269,7 +299,7 @@ class SequenceRatingPrediction(nn.Module):
         user_emb = self.user_embedding(user_idx)
         return user_emb
 
-    def predict(self, user, item_sequence, target_item):
+    def predict(self, user, item_sequence, target_item, target_metadata=None):
         """
         Predict the rating for a specific user and item sequence using the forward method
         and applying a Sigmoid function to the output.
@@ -282,7 +312,7 @@ class SequenceRatingPrediction(nn.Module):
         Returns:
             torch.Tensor: Predicted rating after applying Sigmoid activation.
         """
-        output_rating = self.forward(user, item_sequence, target_item)
+        output_rating = self.forward(user, item_sequence, target_item, target_metadata=target_item)
         # Apply sigmoid activation to the output
         output_rating = nn.Sigmoid()(output_rating)
         return output_rating
@@ -344,7 +374,7 @@ class SequenceRatingPrediction(nn.Module):
                 batch_sequences = item_sequences_batch[i:end_idx]
 
                 # Predict scores for the batch
-                batch_scores = self.predict(batch_users, batch_sequences, batch_items)
+                batch_scores = self.predict(batch_users, batch_sequences, batch_items,target_metadata=batch_items)
                 all_scores.append(batch_scores)
 
         # Concatenate all scores and reshape
