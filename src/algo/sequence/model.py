@@ -375,7 +375,7 @@ class SequenceRatingPrediction(nn.Module):
 # >> tensor([0, 0, 0, 1, 1, 1, 2, 2, 2])
 
 # To do : add a test in a separate file
-seq = SequenceRatingPrediction(5, 10, item_embedding=128, user_embedding_dim=128)
+seq = SequenceRatingPrediction(5, 10, embedding_dim=128, user_embedding_dim=128)
 print(seq.forward(torch.tensor([0, 1, 2]), torch.tensor([[0, 1, 2], [0, 1, 2], [0, 1, 2]]), torch.tensor([0, 1, 2])))
 print(seq.predict(torch.tensor([0, 1, 2]), torch.tensor([[0, 1, 2], [0, 1, 2], [0, 1, 2]]), torch.tensor([0, 1, 2])))
 print(seq.recommend(torch.tensor([0, 1, 2]), torch.tensor([[0, 1, 2], [0, 1, 2], [0, 1, 2]]), k=2))
