@@ -39,6 +39,10 @@ class SequenceRatingPrediction(nn.Module):
         use_user_embedding: bool = True,
         use_start_token: bool = False,
         user_embedding_dim: Optional[int] = None,
+        # use_metadata: bool = False,
+        # metadata_embedding: Optional[torch.nn.Embedding] = None,
+        # metadata_embedding_dim= Optional[int],
+        # metadata_fc_dim: Optional[int] = None,
     ):
         super().__init__()
 
