@@ -38,6 +38,7 @@ class SequenceRatingPrediction(nn.Module):
         dropout=0.2,
         use_user_embedding: bool = True,
         use_start_token: bool = False,
+        user_embedding_dim: Optional[int] = None,
     ):
         super().__init__()
 
@@ -96,8 +97,9 @@ class SequenceRatingPrediction(nn.Module):
         
         if use_user_embedding:
             # User embedding
-            self.user_embedding = nn.Embedding(num_users, embedding_dim)
-            self.final_fc = nn.Linear(embedding_dim * 3, embedding_dim)
+            assert user_embedding_dim is not None, "user_embedding_dim must be provided if use_user_embedding is True"
+            self.user_embedding = nn.Embedding(num_users, user_embedding_dim)
+            self.final_fc = nn.Linear(embedding_dim * 2 + user_embedding_dim, embedding_dim)
         else:
             self.final_fc = nn.Linear(embedding_dim * 2, embedding_dim)
         # self.final_fc2 = nn.Linear(embedding_dim, embedding_dim // 2)
@@ -192,7 +194,7 @@ class SequenceRatingPrediction(nn.Module):
         # )
         
         if self._use_user_embedding:
-            embedded_user = self._get_user_tower(user_ids)  # Shape: [batch_size, embedding_dim]
+            embedded_user = self._get_user_tower(user_ids)  # Shape: [batch_size, user_embedding_dim]
         else:
             embedded_user = torch.tensor([], device = self.item_embedding.weight.device)
         
