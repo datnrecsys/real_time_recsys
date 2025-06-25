@@ -41,13 +41,14 @@ class SequenceRatingPrediction(nn.Module):
         user_embedding_dim: Optional[int] = None,
         use_metadata: bool = False,
         metadata_embedding: Optional[torch.nn.Embedding] = None,
-        metadata_embedding_dim= Optional[int],
+        metadata_embedding_dim: Optional[int] = None,
         metadata_fc_dim: Optional[int] = None,
     ):
         super().__init__()
 
         self.num_items = num_items
         self.num_users = num_users
+        self.use_metadata = use_metadata
 
         # Item embedding (with padding index and <start> index)
         # The last index is reserved for padding, and the second last for start token
@@ -99,18 +100,27 @@ class SequenceRatingPrediction(nn.Module):
         self.dropout = nn.Dropout(p=dropout)
 
         # Metadata embedding
+        self.use_metadata = use_metadata
         self.metadata_embedding = metadata_embedding
         self.metadata_embedding_dim = metadata_embedding_dim
         self.metadata_fc_dim = metadata_fc_dim
-        if self.metadata_embedding is not None:
+
+        use_metadata_now = (
+            self.use_metadata and
+            self.metadata_embedding is not None and
+            self.metadata_embedding_dim is not None and
+            self.metadata_fc_dim is not None
+        )
+
+        if use_metadata_now:
             self.metadata_fc = nn.Linear(metadata_embedding_dim, metadata_fc_dim)
             self.metadata_prelu = nn.PReLU()
             item_tower_dim = embedding_dim + metadata_fc_dim
         else:
             item_tower_dim = embedding_dim
+
         self.item_tower_fc = nn.Linear(item_tower_dim, embedding_dim)
         
-
         if use_user_embedding:
             # User embedding
             assert user_embedding_dim is not None, "user_embedding_dim must be provided if use_user_embedding is True"
@@ -126,21 +136,6 @@ class SequenceRatingPrediction(nn.Module):
         self._use_user_embedding = use_user_embedding
         self._use_start_token = use_start_token
 
-        # Fully connected layers for rating prediction
-        # self.query_fc = nn.Sequential(
-        #     nn.Linear(embedding_dim, embedding_dim),
-        #     # self.gelu,
-        #     # nn.BatchNorm1d(embedding_dim),
-        #     self.gelu,
-        # )
-        
-        # self.candidate_fc = nn.Sequential(
-        #     nn.Linear(embedding_dim, embedding_dim ),
-        #     # nn.BatchNorm1d(embedding_dim),
-        #     self.gelu,
-        #     # self.gelu,
-            
-        # )
         logger.info(f"Start token used: {self._get_item_start_token_idx}"
                     f", Padding token used: {self._get_item_padding_token_idx}")
         
@@ -165,97 +160,51 @@ class SequenceRatingPrediction(nn.Module):
         # Pad start token at the beginning of the sequence
         if self._use_start_token:
             input_seq = F.pad(input_seq, (0, 1), mode='constant', value=self._get_item_start_token_idx)
-        # print("input seq: ", input_seq)
 
         mask = (input_seq == self._get_item_padding_token_idx).float()
-        # print("mask: ", mask)
-        # print(mask.shape) #(batch_size, seq_len)
 
         # Embed input sequence
-        embedded_seq = self.item_embedding(
-            input_seq
-        )  # Shape: [batch_size, seq_len, embedding_dim]
+        embedded_seq = self.item_embedding(input_seq)  # Shape: [batch_size, seq_len, embedding_dim]
 
-        # # # # GRU processing: output the hidden states and the final hidden state
-        # # hidden_state = embedded_seq.mean(dim=1)  # Mean pooling over the sequence dimension
-        # _, hidden_state = self.gru(
-        #     embedded_seq
-        # )
-        # hidden_state = hidden_state.squeeze(
-        #     0
-        # )  # Remove the sequence dimension -> [batch_size, embedding_dim]
-        # # hidden_state = hidden_state.squeeze(0)
-        # # query_embedding = self.query_fc(hidden_state)  # Shape: [batch_size, embedding_dim]
-        # print("hehe")
-        hidden_state = self.encoder.forward(
-            src = embedded_seq,
-            src_key_padding_mask=mask,
-        ) # Shape: [batch_size, seq_len, embedding_dim]
-        # print("hehe")
+        hidden_state = self.encoder.forward(src = embedded_seq,src_key_padding_mask=mask,) # Shape: [batch_size, seq_len, embedding_dim]
         # Get the last hidden state
         hidden_state = hidden_state[:, -1, :]  # Shape: [batch_size, embedding_dim]
-        
-        # print(hidden_state.shape)
-
 
         # Embed the target item
-        embedded_target = self.item_embedding(
-            target_item
-        )  # Shape: [batch_size, 1, embedding_dim]
-        # print(embedded_target)
-        # candidate_embedding = self.candidate_fc(embedded_target)  # Shape: [batch_size, embedding_dim]
+        embedded_target = self.item_embedding(target_item)  # Shape: [batch_size, 1, embedding_dim]
 
-        # query_embedding = F.normalize(hidden_state, p = 2, dim= -1)
-        # candidate_embedding = F.normalize(embedded_target, p = 2, dim= -1)
-        # score = torch.sum(
-        #     query_embedding * candidate_embedding, dim=-1
-        # )
+        use_metadata = (
+        self.use_metadata 
+        and self.metadata_embedding is not None 
+        and target_metadata is not None
+        )
+
+        if use_metadata:
+            embedded_metadata = self.metadata_embedding(target_metadata)
+            embedded_metadata = self.metadata_fc(embedded_metadata)
+            embedded_metadata = self.metadata_prelu(embedded_metadata)
+            item_tower_embedding = torch.cat((embedded_target, embedded_metadata), dim=-1)
+        else:
+            item_tower_embedding = embedded_target
+
+        item_tower_embedding = self.item_tower_fc(item_tower_embedding)
+
         if self._use_user_embedding:
             embedded_user = self._get_user_tower(user_ids)  # Shape: [batch_size, user_embedding_dim]
         else:
             embedded_user = torch.tensor([], device = self.item_embedding.weight.device)
 
-        # Concatenate the hidden state, embedded user for USER TOWER
-        user_tower_embedding = torch.cat(
-            (hidden_state, embedded_user), dim=-1)
-        user_tower_embedding = self.user_tower_fc(user_tower_embedding)  # Shape: [batch_size, embedding_dim]
-        # Concatenate the embedded target, embedded metadata for ITEM TOWER
+        user_tower_embedding = torch.cat((hidden_state, embedded_user), dim=-1)
+        user_tower_embedding = self.user_tower_fc(user_tower_embedding)
 
-        if self.metadata_embedding is not None and target_metadata is not None: 
-            embedded_metadata = self.metadata_embedding(target_metadata)
-            embedded_metadata = self.metadata_fc(embedded_metadata)
-            embedded_metadata = self.metadata_prelu(embedded_metadata)
-            item_tower_embedding = torch.cat(
-                (embedded_target, embedded_metadata), dim=-1
-            )
-            item_tower_embedding = self.item_tower_fc(item_tower_embedding)  # Shape: [batch_size, embedding_dim]
+        combined_embedding = torch.cat((user_tower_embedding, item_tower_embedding), dim=-1)
+        final_embedding = self.final_fc(combined_embedding)
+        final_embedding = self.prelu1(final_embedding)
+        final_embedding = self.dropout(final_embedding)
 
-        else:
-            item_tower_embedding = embedded_target
-            item_tower_embedding = self.item_tower_fc(item_tower_embedding)  # Shape: [batch_size, embedding_dim]
-        # Combine the user tower and item tower embeddings
-        combined_embedding = torch.cat(
-            (user_tower_embedding, item_tower_embedding), dim=-1)  # Shape: [batch_size, embedding_dim * 2]
-        
-        
-        final_embedding = self.final_fc(combined_embedding) # Shape: [batch_size, embedding_dim]
-        final_embedding = self.prelu1(final_embedding)   # Shape: [batch_size, embedding_dim//2]
-        
-        # final_embedding = self.final_fc2(final_embedding) # Shape: [batch_size, embedding_dim//2]
-        # final_embedding = self.prelu2(final_embedding)   # Shape: [batch_size, embedding_dim//2]
-        
-        
-        # Apply sigmoid activation to the output
-        # output_ratings = nn.Sigmoid()(score)
-        # output_ratings = self.output_fc(
-        #     torch.cat((combined_embedding, embedded_target), dim=1)
-        # )
-        output_ratings = self.score_fc(final_embedding) 
-
+        output_ratings = self.score_fc(final_embedding)
         output_ratings = cast(torch.tensor, output_ratings)
-        # print("output ratings: ", output_ratings)
         output_ratings = output_ratings.masked_fill(torch.isnan(output_ratings), 0)
-        # print(output_ratings) # Shape: [batch_size, 1]
         return output_ratings  # Shape: [batch_size]
     
     def _replace_negative_one_with_padding_idx(self, tensor: torch.Tensor) -> torch.Tensor:
@@ -374,7 +323,10 @@ class SequenceRatingPrediction(nn.Module):
                 batch_sequences = item_sequences_batch[i:end_idx]
 
                 # Predict scores for the batch
-                batch_scores = self.predict(batch_users, batch_sequences, batch_items,target_metadata=batch_items)
+                if self.use_metadata and self.metadata_embedding is not None:
+                    batch_scores = self.predict(batch_users, batch_sequences, batch_items, target_metadata=batch_items)
+                else:
+                    batch_scores = self.predict(batch_users, batch_sequences, batch_items)
                 all_scores.append(batch_scores)
 
         # Concatenate all scores and reshape
