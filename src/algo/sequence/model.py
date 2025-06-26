@@ -120,6 +120,7 @@ class SequenceRatingPrediction(nn.Module):
             item_tower_dim = embedding_dim
 
         self.item_tower_fc = nn.Linear(item_tower_dim, embedding_dim)
+        self.item_tower_prelu = nn.PReLU()
         
         if use_user_embedding:
             # User embedding
@@ -129,8 +130,10 @@ class SequenceRatingPrediction(nn.Module):
         else:
             user_embedding_dim = embedding_dim
         self.user_tower_fc = nn.Linear(user_embedding_dim, embedding_dim)
+        self.user_tower_prelu = nn.PReLU()
         
         self.final_fc = nn.Linear(embedding_dim * 2, embedding_dim)
+        self.prelu2 = nn.PReLU()
         self.score_fc = nn.Linear(embedding_dim, 1)
         
         self._use_user_embedding = use_user_embedding
@@ -188,6 +191,7 @@ class SequenceRatingPrediction(nn.Module):
             item_tower_embedding = embedded_target
 
         item_tower_embedding = self.item_tower_fc(item_tower_embedding)
+        item_tower_embedding = self.item_tower_prelu(item_tower_embedding)
 
         if self._use_user_embedding:
             embedded_user = self._get_user_tower(user_ids)  # Shape: [batch_size, user_embedding_dim]
@@ -196,11 +200,14 @@ class SequenceRatingPrediction(nn.Module):
 
         user_tower_embedding = torch.cat((hidden_state, embedded_user), dim=-1)
         user_tower_embedding = self.user_tower_fc(user_tower_embedding)
+        user_tower_embedding = self.user_tower_prelu(user_tower_embedding)
+
 
         combined_embedding = torch.cat((user_tower_embedding, item_tower_embedding), dim=-1)
         final_embedding = self.final_fc(combined_embedding)
         final_embedding = self.prelu1(final_embedding)
         final_embedding = self.dropout(final_embedding)
+        final_embedding = self.prelu2(final_embedding)
 
         output_ratings = self.score_fc(final_embedding)
         output_ratings = cast(torch.tensor, output_ratings)
