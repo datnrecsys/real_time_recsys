@@ -209,7 +209,7 @@ class SequenceRatingPrediction(nn.Module):
     
     def _replace_negative_one_with_padding_idx(self, tensor: torch.Tensor) -> torch.Tensor:
         # Replace -1 in input_seq and target_item with num_items (padding_idx)
-        padding_idx_tensor = torch.tensor(self.item_embedding.padding_idx)
+        padding_idx_tensor = torch.tensor(self.item_embedding.padding_idx, device=tensor.device, dtype=tensor.dtype)
         new_tensor = torch.where(tensor == -1, padding_idx_tensor, tensor)
         
         return new_tensor
