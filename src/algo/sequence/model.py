@@ -81,13 +81,12 @@ class SequenceRatingPrediction(nn.Module):
         # )
         self.encoder_layer = nn.TransformerEncoderLayer(
             d_model=embedding_dim,
-            nhead=8,
+            nhead=4,
             dim_feedforward=embedding_dim,
             batch_first=True,
             dropout=dropout,
             activation=nn.PReLU(),
             layer_norm_eps=1e-5,
-            norm_first=True, 
         )
         
         self.encoder = nn.TransformerEncoder(
