@@ -5,13 +5,9 @@ import lightning as L
 import pandas as pd
 import torch
 from evidently.metric_preset import ClassificationPreset
-from evidently.metrics import (
-    FBetaTopKMetric,
-    NDCGKMetric,
-    PersonalizationMetric,
-    PrecisionTopKMetric,
-    RecallTopKMetric,
-)
+from evidently.metrics import (FBetaTopKMetric, NDCGKMetric,
+                               PersonalizationMetric, PrecisionTopKMetric,
+                               RecallTopKMetric)
 from evidently.pipeline.column_mapping import ColumnMapping
 from evidently.report import Report
 from loguru import logger
@@ -19,7 +15,8 @@ from pydantic import BaseModel
 from torch import nn
 from torchmetrics import AUROC, AveragePrecision
 
-from src.eval.utils import create_label_df, create_rec_df, merge_recs_with_target
+from src.eval.utils import (create_label_df, create_rec_df,
+                            merge_recs_with_target)
 from src.utils.embedding_id_mapper import IDMapper
 
 from .model import Ranker

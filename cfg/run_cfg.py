@@ -4,7 +4,6 @@ from loguru import logger
 from pydantic import BaseModel
 
 
-
 class RunCfg(BaseModel):
     # Feature flags
     use_sbert_features: bool = True

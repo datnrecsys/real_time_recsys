@@ -2,7 +2,8 @@
 FROM python:3.11.9-slim
 
 # Set environment variables
-ENV PYTHONUNBUFFERED=1
+ENV PYTHONUNBUFFERED=1 \
+    POETRY_VERSION=1.8.3
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -13,20 +14,20 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
+# Install Poetry
+RUN curl -sSL https://install.python-poetry.org | python3 -
+
+# Add Poetry to PATH
+ENV PATH="/root/.local/bin:$PATH"
+
 # Create and set the working directory
 WORKDIR /app
 
-# Copy requirements and install Python dependencies
-COPY pyproject.toml ./
+# Copy Poetry files
+COPY poetry.lock pyproject.toml ./
 
-# Install Python dependencies using pip
-RUN pip install --no-cache-dir \
-    "apache-airflow[postgres]==2.10.2" \
-    "apache-airflow-providers-docker<4.0.0,>=3.14.0" \
-    "dbt-core<2.0.0,>=1.8.5" \
-    "dbt-postgres<2.0.0,>=1.8.2" \
-    "psycopg2<3.0.0,>=2.9.9" \
-    "feast[postgres]==0.40.1"
+# Install Python dependencies using Poetry
+RUN poetry install --only feature-pipeline
 
 COPY feature_pipeline/notebooks/*.ipynb ./feature_pipeline/notebooks/
 COPY feature_pipeline/notebooks/*.py ./feature_pipeline/notebooks/

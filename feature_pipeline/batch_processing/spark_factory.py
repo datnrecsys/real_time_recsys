@@ -1,7 +1,10 @@
-from pyspark.sql import SparkSession
 from abc import ABC, abstractmethod
+
 from loguru import logger
+from pyspark.sql import SparkSession
+
 from src.config.settings import Settings
+
 
 class SparkFactory(ABC):
 
@@ -31,6 +34,7 @@ class SparkLocalModeMinioSink(SparkFactory):
         
     def create_spark_session(self, app_name: str = "MinioSinkSparkApp") -> SparkSession:
         import os
+
         # Clear Hadoop configuration directory to avoid default configs
         os.environ.pop("HADOOP_CONF_DIR", None)
         os.environ.pop("HADOOP_HOME", None)

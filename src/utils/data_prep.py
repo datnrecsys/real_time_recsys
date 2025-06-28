@@ -1,13 +1,14 @@
+import json
 from typing import Callable, List
 
+import numpy as np
 import pandas as pd
 from loguru import logger
-from sqlalchemy import Engine
-from tqdm.auto import tqdm
 from scipy.sparse import issparse
-import numpy as np
+from sqlalchemy import Engine
 from sqlalchemy.types import JSON
-import json
+from tqdm.auto import tqdm
+
 
 def parse_dt(df: pd.DataFrame, cols: List[str] = ["timestamp"]) -> pd.DataFrame:
     """Convert specified columns in the DataFrame to datetime format."""

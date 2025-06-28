@@ -1,8 +1,9 @@
+import numpy as np
 import torch
 from torch import nn
-import numpy as np
 
 from src.algo.gSASRec.transformer_decoder import MultiHeadAttention
+
 
 def rotate_half(x):
     x1 = x[..., : x.shape[-1] // 2]

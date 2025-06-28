@@ -57,9 +57,9 @@ x-airflow-common:
     &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: CeleryExecutor
     # Reuse Postgres and Redis from compose.yml
-    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@dwh:5432/airflow
-    AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@dwh:5432/airflow
-    AIRFLOW__CELERY__BROKER_URL: redis://:@kv_store:6379/0
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@138.2.61.6:5432/airflow
+    AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@138.2.61.6:5432/airflow
+    AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
     AIRFLOW__CORE__FERNET_KEY: ''
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
@@ -116,6 +116,20 @@ services:
     depends_on:
       airflow-init:
         condition: service_completed_successfully
+
+  redis:
+    image: redis:latest
+    container_name: airflow-redis
+    expose:
+      - 6379
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 30s
+      retries: 50
+      start_period: 30s
+    
+    restart: always
 
   airflow-worker:
     <<: *airflow-common
@@ -250,6 +264,22 @@ services:
     depends_on:
       airflow-init:
         condition: service_completed_successfully
+
+    # Fix permission denied when using DockerOperator in Airflow
+  # Ref: https://onedevblog.com/how-to-fix-a-permission-denied-when-using-dockeroperator-in-airflow/
+  docker-proxy:
+    image: alpine/socat:latest
+    container_name: airflow-docker-proxy
+    command:
+      - TCP4-LISTEN:2375,fork,reuseaddr
+      - UNIX-CONNECT:/var/run/docker.sock
+    ports:
+      - "2376:2375"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    
+    restart: always
+
 
 networks:
   recsys-mvp:

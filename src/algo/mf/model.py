@@ -6,6 +6,7 @@ from tqdm.auto import tqdm
 
 from src.algo.mf.dataset import UserItemRatingDFDataset
 
+
 class MatrixFactorizationRating(nn.Module):
     """
     A matrix factorization model for rating prediction using embeddings for users and items.

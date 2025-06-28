@@ -3,6 +3,7 @@ import sys
 
 import bentoml
 from dotenv import load_dotenv
+
 # from model_server.models.simple_two_tower import SimpleTwoTowerModelInput
 
 with bentoml.importing():

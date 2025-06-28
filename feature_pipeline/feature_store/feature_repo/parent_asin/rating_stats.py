@@ -1,9 +1,8 @@
 from datetime import timedelta
 
 from feast import Entity, FeatureService, FeatureView, Field, PushSource
-from feast.infra.offline_stores.contrib.postgres_offline_store.postgres_source import (
-    PostgreSQLSource,
-)
+from feast.infra.offline_stores.contrib.postgres_offline_store.postgres_source import \
+    PostgreSQLSource
 from feast.types import Float32, Int64
 
 # Define an entity for the parent_asin. You can think of an entity as a primary key used to

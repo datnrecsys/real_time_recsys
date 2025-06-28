@@ -1,7 +1,8 @@
-import numpy as np
-import random
 import copy
+import random
 import sys
+
+import numpy as np
 import torch
 import torch.nn as nn
 

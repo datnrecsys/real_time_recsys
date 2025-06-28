@@ -7,6 +7,7 @@ from tqdm.auto import tqdm
 
 from src.algo.two_tower.dataset import UserItemRatingDFDataset
 
+
 class TwoTowerRating(nn.Module):
     """
     A two-tower model for rating prediction using embeddings for users and items.

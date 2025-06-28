@@ -2,6 +2,7 @@ from datetime import timedelta
 
 from loguru import logger
 
+
 def train_test_split_timebased(
         interaction_df,
         val_num_days = 15,

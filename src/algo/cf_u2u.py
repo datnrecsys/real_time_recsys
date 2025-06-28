@@ -1,10 +1,11 @@
-import pandas as pd
+from typing import Any, Dict, Optional, Union
+
 import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity
-from typing import Optional
+import pandas as pd
 from loguru import logger
-from typing import Union, Dict, Any
+from sklearn.metrics.pairwise import cosine_similarity
 from tqdm import tqdm
+
 from src.utils.math_utils import sigmoid
 
 # def sigmoid(z: Union[float, int, np.ndarray, list]) -> Union[np.float64, np.ndarray]:

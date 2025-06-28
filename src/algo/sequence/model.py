@@ -1,13 +1,17 @@
 from typing import Any, Dict, Optional, cast
-from loguru import logger 
 
 import torch
 import torch.nn as nn
-from tqdm.auto import tqdm
-from src.algo.sequence.dataset import UserItemBinaryRatingDFDataset
+from loguru import logger
 from torch.nn import functional as F
+from tqdm.auto import tqdm
 
-class SequenceRatingPrediction(nn.Module):
+from src.algo.base.base_dl_model import BaseDLModel
+from src.algo.sequence.dataset import UserItemBinaryRatingDFDataset
+from src.domain.model_request import SequenceModelRequest
+
+
+class SequenceRatingPrediction(BaseDLModel):
     """
     A PyTorch neural network model for predicting user-item interaction ratings based on sequences of previous items
     and a target item. This model uses user and item embeddings, and performs rating predictions using fully connected layers.
@@ -119,7 +123,7 @@ class SequenceRatingPrediction(nn.Module):
                     f", Padding token used: {self._get_item_padding_token_idx}")
         
 
-    def forward(self, user_ids, input_seq, target_item):
+    def forward(self, input_data: SequenceModelRequest)-> torch.Tensor:
         """
         Forward pass to predict the rating.
 
@@ -131,7 +135,14 @@ class SequenceRatingPrediction(nn.Module):
         Returns:
             torch.Tensor: Predicted rating for each user-item pair.
         """
-        
+        if input_data.recommendation:
+            raise ValueError(
+                "Please set recommendation to False when calling forward method."
+            )
+        user_ids = input_data.user_id
+        input_seq = input_data.item_sequence
+        target_item = input_data.target_item
+
         # Replace -1 in input_seq and target_item with num_items (padding_idx)
         input_seq = self._replace_negative_one_with_padding_idx(input_seq)
         target_item = self._replace_negative_one_with_padding_idx(target_item)
@@ -257,24 +268,6 @@ class SequenceRatingPrediction(nn.Module):
         user_emb = self.user_embedding(user_idx)
         return user_emb
 
-    def predict(self, user, item_sequence, target_item):
-        """
-        Predict the rating for a specific user and item sequence using the forward method
-        and applying a Sigmoid function to the output.
-
-        Args:
-            user (torch.Tensor): User ID.
-            item_sequence (torch.Tensor): Sequence of previously interacted items.
-            target_item (torch.Tensor): The target item to predict the rating for.
-
-        Returns:
-            torch.Tensor: Predicted rating after applying Sigmoid activation.
-        """
-        output_rating = self.forward(user, item_sequence, target_item)
-        # Apply sigmoid activation to the output
-        output_rating = nn.Sigmoid()(output_rating)
-        return output_rating
-
     @classmethod
     def get_default_dataset(cls):
         """
@@ -284,11 +277,11 @@ class SequenceRatingPrediction(nn.Module):
             UserItemRatingDFDataset: The expected dataset type.
         """
         return UserItemBinaryRatingDFDataset
+    
 
     def recommend(
         self,
-        users: torch.Tensor,
-        item_sequences: torch.Tensor,
+        input_data: SequenceModelRequest,
         k: int,
         batch_size: int = 128,
     ) -> Dict[str, Any]:
@@ -307,6 +300,9 @@ class SequenceRatingPrediction(nn.Module):
                 'recommendation': List of recommended item indices.
                 'score': List of predicted interaction scores.
         """
+        users = input_data.user_id
+        item_sequences = input_data.item_sequence
+        
         self.eval()
         all_items = torch.arange(
             self.item_embedding.num_embeddings, device=users.device
@@ -330,9 +326,16 @@ class SequenceRatingPrediction(nn.Module):
                 batch_users = user_batch_expanded[i:end_idx]
                 batch_items = items_batch[i:end_idx]
                 batch_sequences = item_sequences_batch[i:end_idx]
+                
+                input_data_batch = SequenceModelRequest(
+                    user_id=batch_users,
+                    item_sequence=batch_sequences,
+                    target_item=batch_items,
+                    recommendation=False
+                )
 
                 # Predict scores for the batch
-                batch_scores = self.predict(batch_users, batch_sequences, batch_items)
+                batch_scores = self.predict(input_data_batch)
                 all_scores.append(batch_scores)
 
         # Concatenate all scores and reshape
@@ -367,7 +370,7 @@ class SequenceRatingPrediction(nn.Module):
 # >> tensor([0, 0, 0, 1, 1, 1, 2, 2, 2])
 
 # To do : add a test in a separate file
-seq = SequenceRatingPrediction(5, 10, 128)
-print(seq.forward(torch.tensor([0, 1, 2]), torch.tensor([[0, 1, 2], [0, 1, 2], [0, 1, 2]]), torch.tensor([0, 1, 2])))
-print(seq.predict(torch.tensor([0, 1, 2]), torch.tensor([[0, 1, 2], [0, 1, 2], [0, 1, 2]]), torch.tensor([0, 1, 2])))
-print(seq.recommend(torch.tensor([0, 1, 2]), torch.tensor([[0, 1, 2], [0, 1, 2], [0, 1, 2]]), k=2))
+# seq = SequenceRatingPrediction(5, 10, 128)
+# print(seq.forward(torch.tensor([0, 1, 2]), torch.tensor([[0, 1, 2], [0, 1, 2], [0, 1, 2]]), torch.tensor([0, 1, 2])))
+# print(seq.predict(torch.tensor([0, 1, 2]), torch.tensor([[0, 1, 2], [0, 1, 2], [0, 1, 2]]), torch.tensor([0, 1, 2])))
+# print(seq.recommend(torch.tensor([0, 1, 2]), torch.tensor([[0, 1, 2], [0, 1, 2], [0, 1, 2]]), k=2))

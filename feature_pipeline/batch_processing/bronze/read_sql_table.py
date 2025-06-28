@@ -1,5 +1,6 @@
 from src.config.settings import Settings
-from src.feature_pipeline.batch_processing.spark_factory import SparkLocalModeMinioSink
+from src.feature_pipeline.batch_processing.spark_factory import \
+    SparkLocalModeMinioSink
 
 settings = Settings()
 spark = SparkLocalModeMinioSink(settings).create_spark_session()

@@ -1,20 +1,16 @@
 import os
 import warnings
 
-import mlflow
 import numpy as np
 import pandas as pd
 from evidently.metric_preset import ClassificationPreset
-from evidently.metrics import (
-    FBetaTopKMetric,
-    NDCGKMetric,
-    PersonalizationMetric,
-    PrecisionTopKMetric,
-    RecallTopKMetric,
-)
+from evidently.metrics import (FBetaTopKMetric, NDCGKMetric,
+                               PersonalizationMetric, PrecisionTopKMetric,
+                               RecallTopKMetric)
 from evidently.pipeline.column_mapping import ColumnMapping
 from evidently.report import Report
 
+import mlflow
 from src.utils.math_utils import sigmoid
 
 warnings.filterwarnings(

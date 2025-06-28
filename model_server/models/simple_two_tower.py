@@ -1,5 +1,7 @@
-from pydantic import BaseModel
 from typing import List
+
+from pydantic import BaseModel
+
 
 class SimpleTwoTowerModelInput(BaseModel):
     user_id: List[str]

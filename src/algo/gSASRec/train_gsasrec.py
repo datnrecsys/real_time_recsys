@@ -1,16 +1,17 @@
 import os
 import time
-import torch
+
 import numpy as np
 import pandas as pd
+import torch
 
-from src.algo.gSASRec.model import SASRec,SASRec_CAPE
 from src.algo.gSASRec.config_electronics import config
-from src.algo.gSASRec.utils import load_config, print_first_batch, plot_combined_metrics
-from src.algo.gSASRec.utils_dataset import *
-from src.algo.gSASRec.utils_validation import evaluate_valid, evaluate
+from src.algo.gSASRec.model import SASRec, SASRec_CAPE
 from src.algo.gSASRec.pre_process_data import pre_process_data
-
+from src.algo.gSASRec.utils import (load_config, plot_combined_metrics,
+                                    print_first_batch)
+from src.algo.gSASRec.utils_dataset import *
+from src.algo.gSASRec.utils_validation import evaluate, evaluate_valid
 
 # Load the configuration file
 # run in kaggle kernel

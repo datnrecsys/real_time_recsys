@@ -1,24 +1,23 @@
-import lightning as L
-import torch
-import pandas as pd
 import os
+
+import lightning as L
+import pandas as pd
+import torch
 import torch.nn as nn
+from evidently.metric_preset import ClassificationPreset
+from evidently.metrics import (FBetaTopKMetric, NDCGKMetric,
+                               PersonalizationMetric, PrecisionTopKMetric,
+                               RecallTopKMetric)
 from evidently.pipeline.column_mapping import ColumnMapping
 from evidently.report import Report
-from evidently.metric_preset import ClassificationPreset
+from loguru import logger
+from pydantic import BaseModel
+from torchmetrics import AUROC, AveragePrecision
 
 from src.algo.two_tower.model import TwoTowerRating
-from src.eval.utils import merge_recs_with_target, create_rec_df, create_label_df
-from evidently.metrics import (
-    NDCGKMetric,
-    RecallTopKMetric,
-    PrecisionTopKMetric,
-    FBetaTopKMetric,
-    PersonalizationMetric,
-)
-from pydantic import BaseModel
-from loguru import logger
-from torchmetrics import AUROC, AveragePrecision
+from src.eval.utils import (create_label_df, create_rec_df,
+                            merge_recs_with_target)
+
 
 class TwoTowerLitModule(L.LightningModule):
     def __init__(
