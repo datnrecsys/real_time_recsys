@@ -40,7 +40,7 @@ redis_client = redis.Redis(
 )
 redis_output_i2i_key_prefix = "output:i2i:"
 # redis_feature_recent_items_key_prefix = "feature:user:recent_items:"
-# redis_output_popular_key = "output:popular"
+redis_output_popular_key = "output:popularitems"
 # redis_item_tag_key_prefix = "dim:tag_item_map:"
 
 # Set the custom OpenAPI schema with examples
@@ -95,6 +95,14 @@ async def get_recommendations_i2i(
         "recommendations": recommendations,
     }
 
+@app.get("/recs/popular")
+@debug_logging_decorator
+async def get_recommendations_popular(
+    count: Optional[int] = Query(10, description="Number of popular items to return"),
+    debug: bool = Query(False, description="Enable debug logging"),
+):
+    recommendations = get_recommendations_from_redis(redis_output_popular_key, count)
+    return {"recommendations": recommendations}
 
 # @app.get(
 #     "/recs/u2i/last_item_i2i",
