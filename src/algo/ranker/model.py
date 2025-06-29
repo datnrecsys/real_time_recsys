@@ -48,7 +48,6 @@ class Ranker(nn.Module):
 
         self.item_embedding = item_embedding
         if item_embedding is None and num_items > 0:
-            print("toi da den day")
             # Item embedding (Add 1 to num_items for the unknown item (-1 padding))
             self.item_embedding = nn.Embedding(
                 num_items + 1,  # One additional index for unknown/padding item
