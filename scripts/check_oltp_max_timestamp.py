@@ -20,11 +20,12 @@ schema = os.getenv("POSTGRES_OLTP_SCHEMA")
 # Create a connection string and engine outside the function
 connection_string = f"postgresql://{username}:{password}@{host}:{port}/{database}"
 engine = create_engine(connection_string)
+conn = engine.raw_connection()
 
 
 def get_curr_oltp_max_timestamp():
     query = f"SELECT max(timestamp) as max_timestamp FROM {schema}.{table_name};"
-    max_timestamp = pd.read_sql(query, engine)["max_timestamp"].iloc[0]
+    max_timestamp = pd.read_sql(query, conn)["max_timestamp"].iloc[0]
 
     # Convert the timestamp to a timezone-aware format (UTC +00:00)
     if pd.notnull(max_timestamp):

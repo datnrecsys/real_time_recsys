@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class FeatureRequest(BaseModel):
@@ -63,3 +63,15 @@ class FeatureRequestResult(BaseModel):
         get_feature_values = lambda idx: feature_results[idx].values[0]
         feature_value = get_feature_values(common_idx)
         return feature_value
+
+class TitleSearchRequest(BaseModel):
+    text: str = Field(description="Text to search in item titles")
+    limit: int = Field(default=50, ge=1, le=100, description="Maximum number of items to return")
+    debug: bool = False
+    
+class SearchItem(BaseModel):
+    parent_asin: str
+    score: float = 1.0
+    
+class TitleSearchResponse(BaseModel):
+    items: List[SearchItem]

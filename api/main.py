@@ -7,14 +7,22 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 import redis
+from qdrant_client import AsyncQdrantClient
+from qdrant_client.models import FieldCondition, Filter, MatchText
+
 from fastapi import FastAPI, HTTPException, Query
 from loguru import logger
 
 from .load_examples import custom_openapi
 from .logging_utils import RequestIDMiddleware
 from .pydantic_models import (FeatureRequest, FeatureRequestFeature,
-                              FeatureRequestResult)
+                              FeatureRequestResult,
+                              TitleSearchRequest,
+                              TitleSearchResponse,
+                              SearchItem)
+
 from .utils import debug_logging_decorator
+
 
 app = FastAPI()
 app.add_middleware(RequestIDMiddleware)
@@ -42,6 +50,15 @@ redis_output_i2i_key_prefix = "output:i2i:"
 # redis_feature_recent_items_key_prefix = "feature:user:recent_items:"
 redis_output_popular_key = "output:popularitems"
 # redis_item_tag_key_prefix = "dim:tag_item_map:"
+
+QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
+QDRANT_PORT = os.getenv("QDRANT_PORT", 6333)
+qdrant_client = AsyncQdrantClient(
+    url=f"http://{QDRANT_HOST}:{QDRANT_PORT}",
+    prefer_grpc=False,  # Use HTTP instead of gRPC
+)
+
+QDRANT_ITEM_COLLECTION = "item2vec_item"
 
 # Set the custom OpenAPI schema with examples
 app.openapi = lambda: custom_openapi(
@@ -104,6 +121,41 @@ async def get_recommendations_popular(
     recommendations = get_recommendations_from_redis(redis_output_popular_key, count)
     return {"recommendations": recommendations}
 
+@app.post(
+    "/search/title",
+    summary="Search for items by title",
+    response_model=TitleSearchResponse)
+
+async def search_title(
+    input: TitleSearchRequest = Query(..., description="Search query and parameters"),
+):
+    """
+    Search for items by title using Qdrant's text search capabilities.
+    """
+    try:
+        records, _ = await qdrant_client.scroll(
+            collection_name=QDRANT_ITEM_COLLECTION,
+            scroll_filter=Filter(
+                must=[
+                    FieldCondition(
+                        key="title",
+                        match=MatchText(text=input.text)  # full-text match
+                    )
+                ]
+            ),
+            with_payload=True,
+            limit=input.limit
+        )
+        item_ids = [r.payload["parent_asin"] for r in records]
+        search_items = [SearchItem(id=item_id, score=1.0) for item_id in item_ids]
+        
+        response = TitleSearchResponse(items=search_items)
+        
+        return response
+    except Exception as e:
+        error_message = f"[DEBUG] Error during search: {str(e)}"
+        logger.error(error_message)
+        raise HTTPException(status_code=500, detail=error_message)
 # @app.get(
 #     "/recs/u2i/last_item_i2i",
 #     summary="Get recommendations for users based on their most recent items",
