@@ -11,6 +11,7 @@ from qdrant_client import AsyncQdrantClient
 from qdrant_client.models import FieldCondition, Filter, MatchText
 
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
 from .load_examples import custom_openapi
@@ -67,6 +68,22 @@ app.openapi = lambda: custom_openapi(
     redis_output_i2i_key_prefix,
 )
 
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",  # React dev server
+        "http://localhost:5173",  # Vite dev server
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:8000",
+        "http://127.0.0.1:8002",
+        "http://127.0.0.1:8001",  # Self
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 def get_recommendations_from_redis(
     redis_key: str, count: Optional[int]

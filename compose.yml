@@ -12,7 +12,7 @@ services:
       - MINIO_ROOT_USER=${AWS_ACCESS_KEY_ID}
       - MINIO_ROOT_PASSWORD=${AWS_SECRET_ACCESS_KEY}
     volumes:
-      - ./data/mlflow/minio_data:/data
+      - ./data/minio:/data
     networks:
       - recsys
 
@@ -133,50 +133,50 @@ services:
     networks:
       - recsys
 
-  feature_online_server:
-    container_name: feature_online_server
-    build:
-      context: .
-      dockerfile: feature_pipeline.Dockerfile
-    env_file:
-      - .env
-    environment:
-      - POSTGRES_HOST=138.2.61.6
-    ports:
-      - "${FEAST_ONLINE_SERVER_PORT:-6566}:${FEAST_ONLINE_SERVER_PORT:-6566}"
-    working_dir: /app/feature_pipeline/feature_store/feature_repo
-    entrypoint: ["feast", "serve", "--port", "${FEAST_ONLINE_SERVER_PORT:-6566}", "--host", "0.0.0.0"]
-    restart: always
+  # feature_online_server:
+  #   container_name: feature_online_server
+  #   build:
+  #     context: .
+  #     dockerfile: feature_pipeline.Dockerfile
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     - POSTGRES_HOST=138.2.61.6
+  #   ports:
+  #     - "${FEAST_ONLINE_SERVER_PORT:-6566}:${FEAST_ONLINE_SERVER_PORT:-6566}"
+  #   working_dir: /app/feature_pipeline/feature_store/feature_repo
+  #   entrypoint: ["feast", "serve", "--port", "${FEAST_ONLINE_SERVER_PORT:-6566}", "--host", "0.0.0.0"]
+  #   restart: always
 
-  feature_offline_server:
-    container_name: feature_offline_server
-    build:
-      context: .
-      dockerfile: feature_pipeline.Dockerfile
-    env_file:
-      - .env
-    environment:
-      - POSTGRES_HOST=138.2.61.6
-    ports:
-      - "${FEAST_OFFLINE_SERVER_PORT:-8815}:${FEAST_OFFLINE_SERVER_PORT:-8815}"
-    working_dir: /app/feature_pipeline/feature_store/feature_repo
-    entrypoint: ["feast", "serve_offline", "--port", "${FEAST_OFFLINE_SERVER_PORT:-8815}", "--host", "0.0.0.0"]
-    restart: always
+  # feature_offline_server:
+  #   container_name: feature_offline_server
+  #   build:
+  #     context: .
+  #     dockerfile: feature_pipeline.Dockerfile
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     - POSTGRES_HOST=138.2.61.6
+  #   ports:
+  #     - "${FEAST_OFFLINE_SERVER_PORT:-8815}:${FEAST_OFFLINE_SERVER_PORT:-8815}"
+  #   working_dir: /app/feature_pipeline/feature_store/feature_repo
+  #   entrypoint: ["feast", "serve_offline", "--port", "${FEAST_OFFLINE_SERVER_PORT:-8815}", "--host", "0.0.0.0"]
+  #   restart: always
 
-  feature_store_ui:
-    container_name: feature_store_ui
-    build:
-      context: .
-      dockerfile: feature_pipeline.Dockerfile
-    env_file:
-      - .env
-    environment:
-      - POSTGRES_HOST=138.2.61.6
-    ports:
-      - "${FEAST_UI_PORT:-8887}:${FEAST_UI_PORT:-8887}"
-    working_dir: /app/feature_pipeline/feature_store/feature_repo
-    entrypoint: ["feast", "ui", "--port", "${FEAST_UI_PORT:-8887}", "--host", "0.0.0.0"]
-    restart: always
+  # feature_store_ui:
+  #   container_name: feature_store_ui
+  #   build:
+  #     context: .
+  #     dockerfile: feature_pipeline.Dockerfile
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     - POSTGRES_HOST=138.2.61.6
+  #   ports:
+  #     - "${FEAST_UI_PORT:-8887}:${FEAST_UI_PORT:-8887}"
+  #   working_dir: /app/feature_pipeline/feature_store/feature_repo
+  #   entrypoint: ["feast", "ui", "--port", "${FEAST_UI_PORT:-8887}", "--host", "0.0.0.0"]
+  #   restart: always
 
 
 networks:
