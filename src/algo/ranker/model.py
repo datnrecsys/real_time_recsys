@@ -47,7 +47,7 @@ class Ranker(nn.Module):
         self.num_users = num_users
 
         self.item_embedding = item_embedding
-        if item_embedding is None:
+        if item_embedding is None and num_items > 0:
             # Item embedding (Add 1 to num_items for the unknown item (-1 padding))
             self.item_embedding = nn.Embedding(
                 num_items + 1,  # One additional index for unknown/padding item
@@ -111,6 +111,12 @@ class Ranker(nn.Module):
             torch.Tensor: Predicted rating for each user-item pair.
         """
         # Replace -1 in input_seq and target_item with num_items (padding_idx)
+        assert self.item_embedding.padding_idx is not None, (
+            "item_embedding padding_idx must be set to a valid index."
+        )
+        assert self.item_sequence_ts_bucket_embedding.padding_idx is not None, (
+            "item_sequence_ts_bucket_embedding padding_idx must be set to a valid index."
+        )
         padding_idx_tensor = torch.tensor(self.item_embedding.padding_idx)
         input_seq = torch.where(input_seq == -1, padding_idx_tensor, input_seq)
         target_item = torch.where(target_item == -1, padding_idx_tensor, target_item)
