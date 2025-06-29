@@ -247,80 +247,82 @@ class LitRanker(L.LightningModule):
                 "classification_proba": classifications,
             }
         ).assign(label=lambda df: df["labels"].gt(0).astype(int))
+        print("Evaluation classification DataFrame:")
+        print(eval_classification_df.head(20))     
+           
+        # self.eval_classification_df = eval_classification_df
 
-        self.eval_classification_df = eval_classification_df
+        # # Evidently
+        # target_col = "label"
+        # prediction_col = "classification_proba"
+        # column_mapping = ColumnMapping(target=target_col, prediction=prediction_col)
+        # classification_performance_report = Report(
+        #     metrics=[
+        #         ClassificationPreset(),
+        #     ]
+        # )
 
-        # Evidently
-        target_col = "label"
-        prediction_col = "classification_proba"
-        column_mapping = ColumnMapping(target=target_col, prediction=prediction_col)
-        classification_performance_report = Report(
-            metrics=[
-                ClassificationPreset(),
-            ]
-        )
+        # classification_performance_report.run(
+        #     reference_data=None,
+        #     current_data=eval_classification_df[[target_col, prediction_col]],
+        #     column_mapping=column_mapping,
+        # )
 
-        classification_performance_report.run(
-            reference_data=None,
-            current_data=eval_classification_df[[target_col, prediction_col]],
-            column_mapping=column_mapping,
-        )
+        # evidently_report_fp = f"{self.log_dir}/evidently_report_classification.html"
+        # os.makedirs(self.log_dir, exist_ok=True)
+        # classification_performance_report.save_html(evidently_report_fp)
 
-        evidently_report_fp = f"{self.log_dir}/evidently_report_classification.html"
-        os.makedirs(self.log_dir, exist_ok=True)
-        classification_performance_report.save_html(evidently_report_fp)
+        # if "mlflow" in str(self.logger.__class__).lower():
+        #     run_id = self.logger.run_id
+        #     mlf_client = self.logger.experiment
+        #     mlf_client.log_artifact(run_id, evidently_report_fp)
 
-        if "mlflow" in str(self.logger.__class__).lower():
-            run_id = self.logger.run_id
-            mlf_client = self.logger.experiment
-            mlf_client.log_artifact(run_id, evidently_report_fp)
+        #     # Calculate PR-AUC using torchmetrics for MLflow
+        #     labels_tensor = torch.tensor(
+        #         eval_classification_df[target_col].values, dtype=torch.int
+        #     )
+        #     probs_tensor = torch.tensor(
+        #         eval_classification_df["classification_proba"].values, dtype=torch.float
+        #     )
+        #     pr_auc_metric = AveragePrecision(task="binary")
+        #     pr_auc = pr_auc_metric(probs_tensor, labels_tensor).item()
+        #     mlf_client.log_metric(run_id, "pr_auc", pr_auc)
 
-            # Calculate PR-AUC using torchmetrics for MLflow
-            labels_tensor = torch.tensor(
-                eval_classification_df[target_col].values, dtype=torch.int
-            )
-            probs_tensor = torch.tensor(
-                eval_classification_df["classification_proba"].values, dtype=torch.float
-            )
-            pr_auc_metric = AveragePrecision(task="binary")
-            pr_auc = pr_auc_metric(probs_tensor, labels_tensor).item()
-            mlf_client.log_metric(run_id, "pr_auc", pr_auc)
-
-            for metric_result in classification_performance_report.as_dict()["metrics"]:
-                metric = metric_result["metric"]
-                if metric == "ClassificationQualityMetric":
-                    roc_auc = float(metric_result["result"]["current"]["roc_auc"])
-                    mlf_client.log_metric(run_id, f"roc_auc", roc_auc)
-                    continue
-                if metric == "ClassificationPRTable":
-                    columns = [
-                        "top_perc",
-                        "count",
-                        "prob",
-                        "tp",
-                        "fp",
-                        "precision",
-                        "recall",
-                    ]
-                    table = metric_result["result"]["current"][1]
-                    table_df = pd.DataFrame(table, columns=columns)
-                    for i, row in table_df.iterrows():
-                        prob = int(row["prob"] * 100)  # MLflow step only takes int
-                        precision = float(row["precision"])
-                        recall = float(row["recall"])
-                        mlf_client.log_metric(
-                            run_id,
-                            f"val_precision_at_prob_as_threshold_step",
-                            precision,
-                            step=prob,
-                        )
-                        mlf_client.log_metric(
-                            run_id,
-                            f"val_recall_at_prob_as_threshold_step",
-                            recall,
-                            step=prob,
-                        )
-                    break
+        #     for metric_result in classification_performance_report.as_dict()["metrics"]:
+        #         metric = metric_result["metric"]
+        #         if metric == "ClassificationQualityMetric":
+        #             roc_auc = float(metric_result["result"]["current"]["roc_auc"])
+        #             mlf_client.log_metric(run_id, f"roc_auc", roc_auc)
+        #             continue
+        #         if metric == "ClassificationPRTable":
+        #             columns = [
+        #                 "top_perc",
+        #                 "count",
+        #                 "prob",
+        #                 "tp",
+        #                 "fp",
+        #                 "precision",
+        #                 "recall",
+        #             ]
+        #             table = metric_result["result"]["current"][1]
+        #             table_df = pd.DataFrame(table, columns=columns)
+        #             for i, row in table_df.iterrows():
+        #                 prob = int(row["prob"] * 100)  # MLflow step only takes int
+        #                 precision = float(row["precision"])
+        #                 recall = float(row["recall"])
+        #                 mlf_client.log_metric(
+        #                     run_id,
+        #                     f"val_precision_at_prob_as_threshold_step",
+        #                     precision,
+        #                     step=prob,
+        #                 )
+        #                 mlf_client.log_metric(
+        #                     run_id,
+        #                     f"val_recall_at_prob_as_threshold_step",
+        #                     recall,
+        #                     step=prob,
+        #                 )
+        #             break
 
     def _log_ranking_metrics(self):
         self.model.eval()
