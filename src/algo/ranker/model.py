@@ -37,6 +37,7 @@ class Ranker(nn.Module):
         embedding_dim: int,
         item_sequence_ts_bucket_size: int,
         bucket_embedding_dim: int,
+        use_item_feature: bool,
         item_feature_size: int,
         item_embedding=None,
         dropout=0.2,
@@ -45,6 +46,7 @@ class Ranker(nn.Module):
 
         self.num_items = num_items
         self.num_users = num_users
+        self.use_item_feature = use_item_feature
 
         self.item_embedding = item_embedding
         if item_embedding is None and num_items > 0:
@@ -75,16 +77,20 @@ class Ranker(nn.Module):
         self.relu = nn.ReLU()
         self.dropout = nn.Dropout(p=dropout)
 
-        self.item_feature_tower = nn.Sequential(
-            nn.Linear(item_feature_size, embedding_dim),
-            nn.BatchNorm1d(embedding_dim),
-            self.relu,
-            self.dropout,
-        )
+        if self.use_item_feature:
+            self.item_feature_tower = nn.Sequential(
+                nn.Linear(item_feature_size, embedding_dim),
+                nn.BatchNorm1d(embedding_dim),
+                self.relu,
+                self.dropout,
+            )
+            input_dim = embedding_dim * 4
+        else:
+            self.item_feature_tower = None
+            input_dim = embedding_dim * 3
 
         # 4 sources of features concatenated
         # target item, user, item features, item sequence
-        input_dim = embedding_dim * 4
         self.fc_rating = nn.Sequential(
             nn.Linear(input_dim, embedding_dim),
             nn.BatchNorm1d(embedding_dim),
@@ -140,7 +146,8 @@ class Ranker(nn.Module):
         # Concatenate embedded_seq and embedded_ts_bucket_seq along the last dimension
         embedded_seq = torch.cat((embedded_id_seq, embedded_ts_bucket_seq), dim=-1)
 
-        item_features_tower_output = self.item_feature_tower(item_features)
+        if self.use_item_feature:
+            item_features_tower_output = self.item_feature_tower(item_features)
 
         gru_input = embedded_seq
         # GRU processing: output the hidden states and the final hidden state
@@ -157,16 +164,26 @@ class Ranker(nn.Module):
         # Embed the user IDs
         user_embeddings = self.user_embedding(user_ids)
 
-        # Concatenate the GRU output with the target item and user embeddings
-        combined_embedding = torch.cat(
-            (
-                gru_output,
-                embedded_target,
-                user_embeddings,
-                item_features_tower_output,
-            ),
-            dim=1,
-        )
+        if self.use_item_feature:
+            # Concatenate the GRU output with the target item and user embeddings
+            combined_embedding = torch.cat(
+                (
+                    gru_output,
+                    embedded_target,
+                    user_embeddings,
+                    item_features_tower_output,
+                ),
+                dim=1,
+            )
+        else:
+            combined_embedding = torch.cat(
+                (
+                    gru_output,
+                    embedded_target,
+                    user_embeddings,
+                ),
+                dim=1,
+            )
 
         # Project combined embedding to rating prediction
         output_ratings = self.fc_rating(combined_embedding)
