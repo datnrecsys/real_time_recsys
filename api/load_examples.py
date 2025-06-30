@@ -25,8 +25,8 @@ def custom_openapi(
     sample_item_id = get_sample_id_from_redis(redis_client, redis_output_i2i_key_prefix)
     # sample_user_id = get_sample_id_from_redis(
     #     redis_client, redis_feature_recent_items_key_prefix
-    # ) 
-    sample_user_id = "change_me"  # Placeholder for user_id
+    # )
+    sample_user_id = "AE22236AFRRSMQIKGG7TPTB75QEA"  # Placeholder for user_id
 
     openapi_schema = get_openapi(
         title="Recommendation API",

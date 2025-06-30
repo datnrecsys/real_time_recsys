@@ -26,7 +26,7 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
             else:
                 # Handle regular responses
                 response_body = response.body
-            
+
             response_json = json.loads(response_body.decode("utf-8"))
             if "metadata" in response_json:
                 response_json["metadata"]["rec_id"] = rec_id

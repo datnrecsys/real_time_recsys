@@ -16,11 +16,13 @@ from loguru import logger
 
 from .load_examples import custom_openapi
 from .logging_utils import RequestIDMiddleware
-from .pydantic_models import (FeatureRequest, FeatureRequestFeature,
-                              FeatureRequestResult,
-                              TitleSearchRequest,
-                              TitleSearchResponse,
-                              SearchItem)
+from .pydantic_models import (
+    FeatureRequest,
+    FeatureRequestResult,
+    TitleSearchRequest,
+    TitleSearchResponse,
+    SearchItem,
+)
 
 from .utils import debug_logging_decorator
 
@@ -40,13 +42,11 @@ logger.add(
 # SEQRP_MODEL_SERVER_URL = os.getenv("SEQRP_MODEL_SERVER_URL", "http://localhost:3000")
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = os.getenv("REDIS_PORT", 6379)
-# FEAST_ONLINE_SERVER_HOST = os.getenv("FEAST_ONLINE_SERVER_HOST", "localhost")
-# FEAST_ONLINE_SERVER_PORT = os.getenv("FEAST_ONLINE_SERVER_PORT", 6566)
+FEAST_ONLINE_SERVER_HOST = os.getenv("FEAST_ONLINE_SERVER_HOST", "138.2.61.6")
+FEAST_ONLINE_SERVER_PORT = os.getenv("FEAST_ONLINE_SERVER_PORT", 6566)
 
 # seqrp_url = f"{SEQRP_MODEL_SERVER_URL}/predict"
-redis_client = redis.Redis(
-    host=REDIS_HOST, port=REDIS_PORT, db=0, decode_responses=True
-)
+redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0, decode_responses=True)
 redis_output_i2i_key_prefix = "output:i2i:"
 # redis_feature_recent_items_key_prefix = "feature:user:recent_items:"
 redis_output_popular_key = "output:popularitems"
@@ -85,9 +85,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-def get_recommendations_from_redis(
-    redis_key: str, count: Optional[int]
-) -> Dict[str, Any]:
+
+def get_recommendations_from_redis(redis_key: str, count: Optional[int]) -> Dict[str, Any]:
     rec_data = redis_client.get(redis_key)
     if not rec_data:
         error_message = f"[DEBUG] No recommendations found for key: {redis_key}"
@@ -129,6 +128,7 @@ async def get_recommendations_i2i(
         "recommendations": recommendations,
     }
 
+
 @app.get("/recs/popular")
 @debug_logging_decorator
 async def get_recommendations_popular(
@@ -138,11 +138,8 @@ async def get_recommendations_popular(
     recommendations = get_recommendations_from_redis(redis_output_popular_key, count)
     return {"recommendations": recommendations}
 
-@app.post(
-    "/search/title",
-    summary="Search for items by title",
-    response_model=TitleSearchResponse)
 
+@app.post("/search/title", summary="Search for items by title", response_model=TitleSearchResponse)
 async def search_title(
     input: TitleSearchRequest = Query(..., description="Search query and parameters"),
 ):
@@ -155,53 +152,109 @@ async def search_title(
             scroll_filter=Filter(
                 must=[
                     FieldCondition(
-                        key="title",
-                        match=MatchText(text=input.text)  # full-text match
+                        key="title", match=MatchText(text=input.text)  # full-text match
                     )
                 ]
             ),
             with_payload=True,
-            limit=input.limit
+            limit=input.limit,
         )
         item_ids = [r.payload["parent_asin"] for r in records]
         search_items = [SearchItem(parent_asin=item_id, score=1.0) for item_id in item_ids]
-        
+
         response = TitleSearchResponse(items=search_items)
-        
+
         return response
     except Exception as e:
         error_message = f"[DEBUG] Error during search: {str(e)}"
         logger.error(error_message)
         raise HTTPException(status_code=500, detail=error_message)
-# @app.get(
-#     "/recs/u2i/last_item_i2i",
-#     summary="Get recommendations for users based on their most recent items",
-# )
-# @debug_logging_decorator
-# async def get_recommendations_u2i_last_item_i2i(
-#     user_id: str = Query(..., description="ID of the user"),
-#     count: Optional[int] = Query(10, description="Number of recommendations to return"),
-#     debug: bool = Query(False, description="Enable debug logging"),
-# ):
-#     logger.debug(f"Getting recent items for user_id: {user_id}")
 
-#     # Step 1: Get the recent items for the user
-#     item_sequences = await feature_store_fetch_item_sequence(user_id)
-#     last_item_id = item_sequences["item_sequence"][-1]
 
-#     logger.debug(f"Most recently interacted item: {last_item_id}")
+@app.post("/feature_store/fetch")
+async def fetch_features(request: FeatureRequest):
+    # Define the URL for the feature store's endpoint
+    feature_store_url = (
+        f"http://{FEAST_ONLINE_SERVER_HOST}:{FEAST_ONLINE_SERVER_PORT}/get-online-features"
+    )
+    logger.info(f"Sending request to {feature_store_url}...")
 
-#     # Step 2: Call the i2i endpoint internally to get recommendations for that item
-#     recommendations = await get_recommendations_i2i(last_item_id, count, debug)
+    # Make the POST request to the feature store
+    async with httpx.AsyncClient() as client:
+        response = await client.post(feature_store_url, json=request.model_dump())
 
-#     # Step 3: Format and return the output
-#     result = {
-#         "user_id": user_id,
-#         "last_item_id": last_item_id,
-#         "recommendations": recommendations["recommendations"],
-#     }
+    # Check if the request was successful
+    if response.status_code == 200:
+        return response.json()
+    else:
+        raise HTTPException(
+            status_code=response.status_code,
+            detail=f"Error fetching features: {response.text}",
+        )
 
-#     return result
+
+@app.get("/feature_store/fetch/item_sequence")
+@debug_logging_decorator
+async def feature_store_fetch_item_sequence(
+    user_id: str = Query(
+        "AE22236AFRRSMQIKGG7TPTB75QEA", description="ID of the user to fetch item sequences for"
+    )
+):
+    """
+    Quick work around to get feature sequences from both streaming sources and common online sources
+    """
+    feature_service = "sequence_stats_v1"
+
+    item_sequence_feature = "user_rating_list_10_recent_asin"
+    item_sequence_ts_feature = "user_rating_list_10_recent_asin_timestamp"
+
+    fr = FeatureRequest(
+        entities={"user_id": [user_id]},
+        feature_service=feature_service,
+    )
+    response = await fetch_features(fr)
+
+    result = FeatureRequestResult.model_validate(response)
+
+    item_sequence = result.get_feature(item_sequence_feature)
+    item_sequence_ts = result.get_feature(item_sequence_ts_feature)
+
+    return {
+        "user_id": user_id,
+        "item_sequence": item_sequence,
+        "item_sequence_ts": item_sequence_ts,
+    }
+
+
+@app.get(
+    "/recs/u2i/last_item_i2i",
+    summary="Get recommendations for users based on their most recent items",
+)
+@debug_logging_decorator
+async def get_recommendations_u2i_last_item_i2i(
+    user_id: str = Query(..., description="ID of the user"),
+    count: Optional[int] = Query(10, description="Number of recommendations to return"),
+    debug: bool = Query(False, description="Enable debug logging"),
+):
+    logger.debug(f"Getting recent items for user_id: {user_id}")
+
+    # Get the recent items for the user
+    item_sequences = await feature_store_fetch_item_sequence(user_id)
+    last_item_id = item_sequences["item_sequence"][-1]
+
+    logger.debug(f"Most recently interacted item: {last_item_id}")
+
+    # Call the i2i endpoint internally to get recommendations for that item
+    recommendations = await get_recommendations_i2i(last_item_id, count, debug)
+
+    # Step 3: Format and return the output
+    result = {
+        "user_id": user_id,
+        "last_item_id": last_item_id,
+        "recommendations": recommendations["recommendations"],
+    }
+
+    return result
 
 
 # @app.get("/recs/u2i/rerank", summary="Get recommendations for users")
