@@ -220,7 +220,7 @@ class Ranker(nn.Module):
         item_features: torch.Tensor,
         item_indices: torch.Tensor,
         k: int,
-        batch_size: int = 128,
+        batch_size: int = 16,
     ) -> Dict[str, Any]:
         """
         Generate top-k recommendations for a batch of users based on their item sequences.
@@ -232,7 +232,7 @@ class Ranker(nn.Module):
             item_features (torch.Tensor): Vectorized target item features, must be aligned with item_indices below.
             item_indices (torch.Tensor): List of item indices to predict score for, usually all items.
             k (int): Number of recommendations to generate for each user.
-            batch_size (int, optional): Batch size for processing users. Defaults to 128.
+            batch_size (int, optional): Batch size for processing data points. Defaults to 1.
 
         Returns:
             Dict[str, Any]: Dictionary containing recommended items and scores:
@@ -248,61 +248,52 @@ class Ranker(nn.Module):
         scores = []
 
         with torch.no_grad():
+            # Create all user-item pairs
             total_users = users.size(0)
-            for i in tqdm(
-                range(0, total_users, batch_size), desc="Generating recommendations"
-            ):
-                user_batch = users[i : i + batch_size]
-                item_sequence_batch = item_sequences[i : i + batch_size]
-                item_ts_bucket_sequence_batch = item_ts_bucket_sequences[
-                    i : i + batch_size
-                ]
-
-                # Expand user_batch to match all items
-                user_batch_expanded = (
-                    user_batch.unsqueeze(1).expand(-1, len(all_items)).reshape(-1)
-                )
-                items_batch = (
-                    all_items.unsqueeze(0).expand(len(user_batch), -1).reshape(-1)
-                )
-                item_sequences_batch = item_sequence_batch.unsqueeze(1).repeat(
-                    1, len(all_items), 1
-                )
-                item_sequences_batch = item_sequences_batch.view(
-                    -1, item_sequence_batch.size(-1)
-                )
-                item_ts_bucket_sequences_batch = (
-                    item_ts_bucket_sequence_batch.unsqueeze(1).repeat(
-                        1, len(all_items), 1
-                    )
-                )
-                item_ts_bucket_sequences_batch = item_ts_bucket_sequences_batch.view(
-                    -1, item_ts_bucket_sequence_batch.size(-1)
-                )
-                items_feature_batch = item_features.unsqueeze(0).repeat(
-                    len(user_batch), 1, 1
-                )
-                items_feature_batch = items_feature_batch.view(
-                    -1, items_feature_batch.size(-1)
-                )
-
+            total_items = len(all_items)
+            
+            # Expand to create all user-item combinations
+            user_expanded = users.unsqueeze(1).expand(-1, total_items).reshape(-1)
+            item_expanded = all_items.unsqueeze(0).expand(total_users, -1).reshape(-1)
+            
+            item_sequences_expanded = item_sequences.unsqueeze(1).repeat(1, total_items, 1).view(-1, item_sequences.size(-1))
+            item_ts_bucket_sequences_expanded = item_ts_bucket_sequences.unsqueeze(1).repeat(1, total_items, 1).view(-1, item_ts_bucket_sequences.size(-1))
+            item_features_expanded = item_features.unsqueeze(0).repeat(total_users, 1, 1).view(-1, item_features.size(-1))
+            
+            total_pairs = len(user_expanded)
+            
+            # Process in batches of batch_size data points
+            all_scores = []
+            for i in tqdm(range(0, total_pairs, batch_size), desc="Generating recommendations"):
+                end_idx = min(i + batch_size, total_pairs)
+                
+                batch_users = user_expanded[i:end_idx]
+                batch_items = item_expanded[i:end_idx]
+                batch_sequences = item_sequences_expanded[i:end_idx]
+                batch_ts_sequences = item_ts_bucket_sequences_expanded[i:end_idx]
+                batch_features = item_features_expanded[i:end_idx]
+                
                 # Predict scores for the batch
                 batch_scores = self.predict(
-                    user_batch_expanded,
-                    item_sequences_batch,
-                    item_ts_bucket_sequences_batch,
-                    items_feature_batch,
-                    items_batch,
-                ).view(len(user_batch), -1)
-
-                # Get top k items for each user in the batch
-                topk_scores, topk_indices = torch.topk(batch_scores, k, dim=1)
-                topk_items = all_items[topk_indices]
-
-                # Collect recommendations
-                user_indices.extend(user_batch.repeat_interleave(k).cpu().tolist())
-                recommendations.extend(topk_items.cpu().flatten().tolist())
-                scores.extend(topk_scores.cpu().flatten().tolist())
+                    batch_users,
+                    batch_sequences,
+                    batch_ts_sequences,
+                    batch_features,
+                    batch_items,
+                )
+                all_scores.append(batch_scores)
+            
+            # Concatenate all scores and reshape to [num_users, num_items]
+            all_scores = torch.cat(all_scores, dim=0).view(total_users, total_items)
+            
+            # Get top k items for each user
+            topk_scores, topk_indices = torch.topk(all_scores, k, dim=1)
+            topk_items = all_items[topk_indices]
+            
+            # Collect recommendations
+            user_indices.extend(users.repeat_interleave(k).cpu().tolist())
+            recommendations.extend(topk_items.cpu().flatten().tolist())
+            scores.extend(topk_scores.cpu().flatten().tolist())
 
         return {
             "user_indice": user_indices,
