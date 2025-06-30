@@ -26,6 +26,7 @@ feature-server-down:
 	docker compose -f compose.yml down -v
 
 airflow-up:
+	docker build -f feature_pipeline.Dockerfile . -t data-pipeline:0.0.1
 	docker compose -f compose.airflow.yml up -d
 
 airflow-logs:

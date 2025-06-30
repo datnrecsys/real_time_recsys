@@ -32,7 +32,7 @@ default_args = {
 }
 
 dag = DAG(
-    "update_features",
+    "Rematerialize",
     default_args=default_args,
     description="Rematerialize",
     catchup=False,
@@ -44,11 +44,12 @@ t1 = DockerOperator(
     image="data-pipeline:0.0.1",
     api_version="auto",
     auto_remove=True,
-    command="sh -c 'cd ../feature_store/feature_repo\
-            && poetry run feast apply materialize 1900-01-01T00:00:00 2022-01-20T19:13:12",
+    command="sh -c 'cd ../feature_store/feature_repo &&\
+        poetry run feast materialize 1900-01-01T00:00:00 2022-01-20T19:13:12'",
     docker_url="tcp://docker-proxy:2375",
     network_mode="host",
     dag=dag,
+    environment=envs,
 )
 
 # t2 = DockerOperator(
