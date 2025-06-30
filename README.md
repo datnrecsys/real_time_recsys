@@ -61,4 +61,9 @@
     ```
 
 
-export MATERIALIZE_CHECKPOINT_TIME=$(poetry run python scripts/check_oltp_max_timestamp.py 2>&1 | awk -F'<ts>|</ts>' '{print $2}')
+export MATERIALIZE_CHECKPOINT_TIME=$(poetry run python ../../../scripts/check_oltp_max_timestamp.py 2>&1 | awk -F'<ts>|</ts>' '{print $2}')
+export MATERIALIZE_CHECKPOINT_TIME=$(echo "$MATERIALIZE_CHECKPOINT_TIME" | xargs)
+
+poetry run feast materialize-incremental 1900-01-01T00:00:00
+poetry run feast apply
+poetry run feast materialize-incremental "$MATERIALIZE_CHECKPOINT_TIME"

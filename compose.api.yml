@@ -14,3 +14,11 @@ services:
     # volumes:
     #   - ./api:/app/api
     command: ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    networks:
+      - recsys
+    restart: always
+
+networks:
+  recsys:
+    external: true
+    name: real_time_recsys_recsys

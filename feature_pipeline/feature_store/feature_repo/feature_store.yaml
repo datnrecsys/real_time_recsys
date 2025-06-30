@@ -1,4 +1,4 @@
-project: recsys_mvp
+project: real_time_recsys
 provider: local
 registry:
     registry_type: sql
