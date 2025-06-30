@@ -2,7 +2,7 @@ from typing import Callable, List
 
 import pandas as pd
 from loguru import logger
-from sqlalchemy import Engine
+from sqlalchemy.engine import Engine
 from tqdm.auto import tqdm
 from scipy.sparse import issparse
 import numpy as np
