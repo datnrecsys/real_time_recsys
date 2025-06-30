@@ -181,5 +181,6 @@ data/
 .dvc/tmp
 .dvc/cache
 outputs/
+airflow/
 
 # End of https://www.toptal.com/developers/gitignore/api/python
