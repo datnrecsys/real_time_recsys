@@ -40,3 +40,5 @@ COPY src/ ./src/
 WORKDIR /app/feature_pipeline/notebooks
 
 RUN mkdir -p ./papermill-output
+
+ENTRYPOINT ["poetry", "run"]
