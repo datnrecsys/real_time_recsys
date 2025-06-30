@@ -164,7 +164,7 @@ async def search_title(
             limit=input.limit
         )
         item_ids = [r.payload["parent_asin"] for r in records]
-        search_items = [SearchItem(id=item_id, score=1.0) for item_id in item_ids]
+        search_items = [SearchItem(parent_asin=item_id, score=1.0) for item_id in item_ids]
         
         response = TitleSearchResponse(items=search_items)
         
