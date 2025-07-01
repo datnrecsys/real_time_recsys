@@ -282,5 +282,6 @@ services:
 
 
 networks:
-  recsys-mvp:
+  recsys:
     external: true
+    name: real_time_recsys_recsys
