@@ -7,7 +7,7 @@ from evidently.pipeline.column_mapping import ColumnMapping
 from evidently.report import Report
 from evidently.metric_preset import ClassificationPreset
 
-from src.algo.sequence.model import SequenceRatingPrediction
+from src.algo.sequence_ranker.model import SequenceRatingPrediction
 from src.eval.log_metrics import log_ranking_metrics, log_classification_metrics
 from src.eval.utils import merge_recs_with_target, create_rec_df, create_label_df
 from evidently.metrics import (

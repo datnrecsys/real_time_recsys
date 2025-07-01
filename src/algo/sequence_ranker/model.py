@@ -4,7 +4,7 @@ from loguru import logger
 import torch
 import torch.nn as nn
 from tqdm.auto import tqdm
-from src.algo.sequence.dataset import UserItemBinaryRatingDFDataset
+from src.algo.sequence_ranker.dataset import UserItemBinaryRatingDFDataset
 from torch.nn import functional as F
 
 class SequenceRatingPrediction(nn.Module):
