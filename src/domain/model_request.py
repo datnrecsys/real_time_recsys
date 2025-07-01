@@ -9,7 +9,7 @@ from loguru import logger
 
 @dataclass
 class ModelRequest:
-    user_id: torch.Tensor
+    user_id: torch.Tensor = None
     target_item: Optional[torch.Tensor] = None
     recommendation: bool = True
 

@@ -22,9 +22,12 @@ from .pydantic_models import (
     TitleSearchRequest,
     TitleSearchResponse,
     SearchItem,
+    ItemSequenceInput,
 )
 
 from .utils import debug_logging_decorator
+import time
+from datetime import datetime
 
 
 app = FastAPI()
@@ -240,22 +243,106 @@ async def get_recommendations_u2i_last_item_i2i(
 
     # Get the recent items for the user
     item_sequences = await feature_store_fetch_item_sequence(user_id)
-    last_item_id = item_sequences["item_sequence"][-1]
+    
+    try:
+        last_item_id = item_sequences["item_sequence"][-1]
 
-    logger.debug(f"Most recently interacted item: {last_item_id}")
+        logger.debug(f"Most recently interacted item: {last_item_id}")
 
-    # Call the i2i endpoint internally to get recommendations for that item
-    recommendations = await get_recommendations_i2i(last_item_id, count, debug)
+        # Call the i2i endpoint internally to get recommendations for that item
+        recommendations = await get_recommendations_i2i(last_item_id, count, debug)
 
-    # Step 3: Format and return the output
-    result = {
-        "user_id": user_id,
-        "last_item_id": last_item_id,
-        "recommendations": recommendations["recommendations"],
-    }
-
+        # Step 3: Format and return the output
+        result = {
+            "user_id": user_id,
+            "last_item_id": last_item_id,
+            "recommendations": recommendations["recommendations"],
+        }
+        
+    except Exception as e:
+        error_message = f"[DEBUG] Error retrieving last item for user {user_id}: {str(e)}. Falling back to popular recommendations."
+        logger.debug(error_message)
+        
+        # Fallback to popular recommendations if no recent items are found
+        popular_recs = await get_recommendations_popular(count, debug)
+        result = {
+            "user_id": user_id,
+            "last_item_id": None,
+            "recommendations": popular_recs["recommendations"],
+        }
+    
     return result
 
+@app.post(
+    "/feature_store/push/item_sequence",
+    summary="Push new item sequence for a user to the feature store",
+)
+async def push_new_item_sequence(
+    input: ItemSequenceInput,
+):
+    response = await feature_store_fetch_item_sequence(input.user_id)
+
+    item_sequences = response.get("item_sequence")
+    
+    if not item_sequences:
+        item_sequences = []
+    
+    new_item_sequences = item_sequences + input.new_items
+    new_item_sequences = new_item_sequences[-input.sequence_length:]
+    new_item_sequences_str = ",".join(new_item_sequences)
+
+    item_sequence_tss = response.get("item_sequence_ts")
+    if not item_sequence_tss:
+        item_sequence_tss = []
+    new_item_sequence_tss = item_sequence_tss + [int(time.time())]
+    new_item_sequence_tss = new_item_sequence_tss[-input.sequence_length:]
+    new_item_sequence_tss_str = ",".join([str(ts) for ts in new_item_sequence_tss])
+
+    event_dict = {
+        "user_id": [input.user_id],
+        "timestamp": [str(datetime.now())],
+        "dedup_rn": [
+            1
+        ],  # Mock to conform with current offline schema TODO: Remove this column in the future
+        "user_rating_cnt_90d": [1],  # Mock
+        "user_rating_avg_prev_rating_90d": [4.5],  # Mock
+        "user_rating_list_10_recent_asin": [new_item_sequences_str],
+        "user_rating_list_10_recent_asin_timestamp": [new_item_sequence_tss_str],
+    }
+    push_data = {
+        "push_source_name": "user_rating_stats_push_source",
+        "df": event_dict,
+        "to": "online",
+    }
+    logger.info(f"Event data to be pushed to feature store PUSH API {event_dict}")
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            r = await client.post(
+                f"http://{FEAST_ONLINE_SERVER_HOST}:{FEAST_ONLINE_SERVER_PORT}/push",
+                json=push_data,
+            )
+            if r.status_code == 200:
+                logger.info(f"Successfully pushed data to feature store: {r.json()}")
+                return {"status": "success", "message": "Data pushed successfully"}
+            else:
+                logger.error(f"Error: {r.status_code} {r.text}")
+                raise HTTPException(status_code=r.status_code, detail=f"Feature store error: {r.text}")
+        except httpx.RequestError as e:
+            # Network/connection errors
+            error_message = f"[DEBUG] Network error pushing data to feature store: {str(e)}"
+            logger.error(error_message)
+            raise HTTPException(status_code=503, detail="Feature store service unavailable")
+        except httpx.HTTPStatusError as e:
+            # HTTP status errors (4xx, 5xx)
+            error_message = f"[DEBUG] HTTP error pushing data to feature store: {e.response.status_code} {e.response.text}"
+            logger.error(error_message)
+            raise HTTPException(status_code=e.response.status_code, detail=f"Feature store error: {e.response.text}")
+        except Exception as e:
+            # Any other unexpected errors
+            error_message = f"[DEBUG] Unexpected error pushing data to feature store: {str(e)}"
+            logger.error(error_message)
+            raise HTTPException(status_code=500, detail="Internal server error")
 
 # @app.get("/recs/u2i/rerank", summary="Get recommendations for users")
 # @debug_logging_decorator

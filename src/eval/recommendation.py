@@ -10,6 +10,7 @@ from evidently.report import Report
 
 from src.algo.base.base_dl_model import BaseDLModel
 from src.algo.sequence.model import SequenceRatingPrediction
+from src.algo.sequence_two_tower.model import SequenceRatingPrediction as SequenceRatingPredictionTwoTower
 from src.domain.model_request import ModelRequest, SequenceModelRequest
 from src.utils.embedding_id_mapper import IDMapper
 import warnings
@@ -288,6 +289,11 @@ class RankingMetricComputer(Generic[T]):
         """
         if isinstance(self.rec_model, SequenceRatingPrediction):
             return SequenceModelRequest.from_df_for_rec(df, device=device)
+        elif isinstance(self.rec_model, SequenceRatingPredictionTwoTower):
+            return SequenceModelRequest.from_df_for_rec(
+                df, 
+                device=device
+            )
         else:
             return ModelRequest.from_df_for_rec(df)
 

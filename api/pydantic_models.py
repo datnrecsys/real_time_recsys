@@ -123,3 +123,9 @@ class FeatureRequestResult(BaseModel):
                 feature_value = feature_value.split(",")
 
         return feature_value
+    
+
+class ItemSequenceInput(BaseModel):
+    user_id: str = Field("AE22236AFRRSMQIKGG7TPTB75QEA", description="ID of the user to push item sequence for")
+    new_items: List[str] = Field(..., description="List of new item IDs to add to sequence")
+    sequence_length: int = Field(10, description="Maximum length of the sequence to maintain")
