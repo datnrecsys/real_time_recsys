@@ -130,7 +130,7 @@ class SequenceRatingPrediction(nn.Module):
 
         if use_extra_item_embedding_now:
             assert extra_item_embedding_dim is not None, "extra_item_embedding_dim must be provided if use_extra_item_embedding is True"
-            self.prelu_ex_item_emb = nn.ReLU()
+            self.prelu_ex_item_emb = nn.PReLU()
             # self.dropout = nn.Dropout(p=dropout)
             self.extra_item_feature_layer = nn.Sequential(
                 nn.Linear(extra_item_embedding_dim, embedding_dim),
