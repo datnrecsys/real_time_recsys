@@ -133,7 +133,6 @@ class SequenceRatingPrediction(nn.Module):
             self.prelu_ex_item_emb = nn.PReLU()
             # self.dropout = nn.Dropout(p=dropout)
             self.extra_item_feature_layer = nn.Sequential(
-                nn.BatchNorm1d(embedding_dim),
                 nn.Linear(extra_item_embedding_dim, embedding_dim),
                 nn.BatchNorm1d(embedding_dim),
                 self.prelu_ex_item_emb,
