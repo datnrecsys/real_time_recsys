@@ -130,13 +130,13 @@ class SequenceRatingPrediction(nn.Module):
 
         if use_extra_item_embedding_now:
             assert extra_item_embedding_dim is not None, "extra_item_embedding_dim must be provided if use_extra_item_embedding is True"
-            self.relu = nn.ReLU()
-            self.dropout = nn.Dropout(p=dropout)
+            self.prelu_ex_item_emb = nn.ReLU()
+            # self.dropout = nn.Dropout(p=dropout)
             self.extra_item_feature_layer = nn.Sequential(
                 nn.Linear(extra_item_embedding_dim, embedding_dim),
                 nn.BatchNorm1d(embedding_dim),
-                self.relu,
-                self.dropout,
+                self.prelu_ex_item_emb,
+                # self.dropout,
             )
             item_tower_dim += embedding_dim
 
@@ -314,6 +314,8 @@ class SequenceRatingPrediction(nn.Module):
         self,
         users: torch.Tensor,
         item_sequences: torch.Tensor,
+        item_features: Optional[torch.Tensor],
+        item_indices: Optional[torch.Tensor],
         k: int,
         batch_size: int = 128,
     ) -> Dict[str, Any]:
@@ -323,6 +325,8 @@ class SequenceRatingPrediction(nn.Module):
         Args:
             users (torch.Tensor): Tensor containing user IDs.
             item_sequences (torch.Tensor): Tensor containing sequences of previously interacted items.
+            item_features (Optional[torch.Tensor]): Tensor containing item features (e.g., titles, extra embeddings).
+            item_indices (Optional[torch.Tensor]): Tensor containing item indices to consider for recommendation.
             k (int): Number of recommendations to generate for each user.
             batch_size (int, optional): Batch size for processing user-item pairs. Defaults to 128.
 
@@ -333,15 +337,38 @@ class SequenceRatingPrediction(nn.Module):
                 'score': List of predicted interaction scores.
         """
         self.eval()
-        all_items = torch.arange(
-            self.item_embedding.num_embeddings, device=users.device
-        )
+        device = users.device
 
-        # Create all user-item pairs
+        # Use provided item_indices or all items if not specified
+        if item_indices is None or len(item_indices) == 0:
+            all_items = torch.arange(self.item_embedding.num_embeddings, device=device)
+        else:
+            all_items = item_indices.to(device)
+
+        # Prepare user-item pairs
         user_batch_expanded = users.unsqueeze(1).expand(-1, len(all_items)).reshape(-1)
         items_batch = all_items.unsqueeze(0).expand(len(users), -1).reshape(-1)
         item_sequences_batch = item_sequences.unsqueeze(1).repeat(1, len(all_items), 1)
         item_sequences_batch = item_sequences_batch.view(-1, item_sequences.size(-1))
+
+        # Prepare item features if needed
+        if self.use_title and self.title_embedding is not None:
+            # Assume item_features contains titles as indices
+            if item_features is not None:
+                titles_batch = item_features[items_batch] if item_features.dim() > 1 else item_features[items_batch]
+            else:
+                titles_batch = items_batch  # fallback: use item indices as title indices
+        else:
+            titles_batch = None
+
+        if self.use_extra_item_embedding:
+            # Assume item_features contains extra embeddings as a tensor of shape [num_items, extra_dim]
+            if item_features is not None:
+                extra_emb_batch = item_features[items_batch]
+            else:
+                extra_emb_batch = torch.zeros((len(items_batch), self.extra_item_feature_layer[0].in_features), device=device)
+        else:
+            extra_emb_batch = None
 
         all_scores = []
 
@@ -351,16 +378,21 @@ class SequenceRatingPrediction(nn.Module):
                 range(0, total_pairs, batch_size), desc="Generating recommendations"
             ):
                 end_idx = min(i + batch_size, total_pairs)
-                
                 batch_users = user_batch_expanded[i:end_idx]
                 batch_items = items_batch[i:end_idx]
                 batch_sequences = item_sequences_batch[i:end_idx]
 
-                # Predict scores for the batch
-                if self.use_title and self.title_embedding is not None and self.use_extra_item_embedding:
-                    batch_scores = self.predict(batch_users, batch_sequences, batch_items, target_title=batch_items, target_extra_embedding=None)
-                else:
-                    batch_scores = self.predict(batch_users, batch_sequences, batch_items)
+                # Prepare batch features if needed
+                batch_titles = titles_batch[i:end_idx] if titles_batch is not None else None
+                batch_extra_emb = extra_emb_batch[i:end_idx] if extra_emb_batch is not None else None
+
+                batch_scores = self.predict(
+                    batch_users,
+                    batch_sequences,
+                    batch_items,
+                    target_title=batch_titles,
+                    target_extra_embedding=batch_extra_emb,
+                )
                 all_scores.append(batch_scores)
 
         # Concatenate all scores and reshape
@@ -381,7 +413,6 @@ class SequenceRatingPrediction(nn.Module):
             "recommendation": recommendations,
             "score": scores,
         }
-
     
 
 

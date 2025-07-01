@@ -297,9 +297,24 @@ class SeqModellingLitModule(L.LightningModule):
             subset=["user_indice"]
         )
 
+        # Prepare item_features if needed
+        item_features = None
+        if hasattr(self.model, 'use_title') and self.model.use_title and hasattr(self.model, 'title_embedding') and self.model.title_embedding is not None:
+            # Assume title indices are available in the dataframe as 'item_title' or similar
+            if 'item_title' in to_rec_df.columns:
+                item_features = torch.tensor(to_rec_df['item_title'].values, device=self._get_device())
+            else:
+                item_features = torch.tensor(to_rec_df[item_col].values, device=self._get_device())
+        elif hasattr(self.model, 'use_extra_item_embedding') and self.model.use_extra_item_embedding:
+            # Assume extra item features are available in the dataframe as 'item_feature' or similar
+            if 'item_feature' in to_rec_df.columns:
+                item_features = torch.tensor(np.stack(to_rec_df['item_feature'].values), device=self._get_device())
+
         recommendations = self.model.recommend(
             torch.tensor(to_rec_df["user_indice"].values, device=self._get_device()),
             torch.tensor(np.stack(to_rec_df["item_sequence"].values).astype(np.int32), device=self._get_device()).int(),
+            item_features,
+            None,  # item_indices=None to recommend from all items
             k=top_K,
             batch_size=4,
         )
