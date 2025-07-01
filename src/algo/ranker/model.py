@@ -80,7 +80,7 @@ class Ranker(nn.Module):
         if self.use_item_feature:
             self.item_feature_tower = nn.Sequential(
                 nn.Linear(item_feature_size, embedding_dim),
-                nn.BatchNorm1d(embedding_dim),
+                # nn.BatchNorm1d(embedding_dim),
                 self.relu,
                 self.dropout,
             )
@@ -93,7 +93,7 @@ class Ranker(nn.Module):
         # target item, user, item features, item sequence
         self.fc_rating = nn.Sequential(
             nn.Linear(input_dim, embedding_dim),
-            nn.BatchNorm1d(embedding_dim),
+            # nn.BatchNorm1d(embedding_dim),
             self.relu,
             self.dropout,
             nn.Linear(embedding_dim, 1),
@@ -232,7 +232,7 @@ class Ranker(nn.Module):
             item_features (torch.Tensor): Vectorized target item features, must be aligned with item_indices below.
             item_indices (torch.Tensor): List of item indices to predict score for, usually all items.
             k (int): Number of recommendations to generate for each user.
-            batch_size (int, optional): Batch size for processing data points. Defaults to 1.
+            batch_size (int, optional): Batch size for processing data points. Defaults to 16.
 
         Returns:
             Dict[str, Any]: Dictionary containing recommended items and scores:
@@ -241,59 +241,50 @@ class Ranker(nn.Module):
                 'score': List of predicted interaction scores.
         """
         self.eval()
-        all_items = item_indices
-
+        
         user_indices = []
         recommendations = []
         scores = []
 
         with torch.no_grad():
-            # Create all user-item pairs
             total_users = users.size(0)
-            total_items = len(all_items)
+            total_items = len(item_indices)
             
-            # Expand to create all user-item combinations
-            user_expanded = users.unsqueeze(1).expand(-1, total_items).reshape(-1)
-            item_expanded = all_items.unsqueeze(0).expand(total_users, -1).reshape(-1)
-            
-            item_sequences_expanded = item_sequences.unsqueeze(1).repeat(1, total_items, 1).view(-1, item_sequences.size(-1))
-            item_ts_bucket_sequences_expanded = item_ts_bucket_sequences.unsqueeze(1).repeat(1, total_items, 1).view(-1, item_ts_bucket_sequences.size(-1))
-            item_features_expanded = item_features.unsqueeze(0).repeat(total_users, 1, 1).view(-1, item_features.size(-1))
-            
-            total_pairs = len(user_expanded)
-            
-            # Process in batches of batch_size data points
-            all_scores = []
-            for i in tqdm(range(0, total_pairs, batch_size), desc="Generating recommendations"):
-                end_idx = min(i + batch_size, total_pairs)
+            # Process each user separately to avoid creating large tensors
+            for user_idx in tqdm(range(total_users), desc="Processing users"):
+                user_scores = []
                 
-                batch_users = user_expanded[i:end_idx]
-                batch_items = item_expanded[i:end_idx]
-                batch_sequences = item_sequences_expanded[i:end_idx]
-                batch_ts_sequences = item_ts_bucket_sequences_expanded[i:end_idx]
-                batch_features = item_features_expanded[i:end_idx]
+                # Process items in batches for current user
+                for item_start in range(0, total_items, batch_size):
+                    item_end = min(item_start + batch_size, total_items)
+                    batch_items = item_indices[item_start:item_end]
+                    batch_size_actual = len(batch_items)
+                    
+                    # Repeat user data for current item batch
+                    batch_users = users[user_idx:user_idx+1].expand(batch_size_actual)
+                    batch_sequences = item_sequences[user_idx:user_idx+1].expand(batch_size_actual, -1)
+                    batch_ts_sequences = item_ts_bucket_sequences[user_idx:user_idx+1].expand(batch_size_actual, -1)
+                    batch_features = item_features[item_start:item_end]
+                    
+                    # Predict scores for the batch
+                    batch_scores = self.predict(
+                        batch_users,
+                        batch_sequences,
+                        batch_ts_sequences,
+                        batch_features,
+                        batch_items,
+                    )
+                    user_scores.append(batch_scores.squeeze(-1))
                 
-                # Predict scores for the batch
-                batch_scores = self.predict(
-                    batch_users,
-                    batch_sequences,
-                    batch_ts_sequences,
-                    batch_features,
-                    batch_items,
-                )
-                all_scores.append(batch_scores)
-            
-            # Concatenate all scores and reshape to [num_users, num_items]
-            all_scores = torch.cat(all_scores, dim=0).view(total_users, total_items)
-            
-            # Get top k items for each user
-            topk_scores, topk_indices = torch.topk(all_scores, k, dim=1)
-            topk_items = all_items[topk_indices]
-            
-            # Collect recommendations
-            user_indices.extend(users.repeat_interleave(k).cpu().tolist())
-            recommendations.extend(topk_items.cpu().flatten().tolist())
-            scores.extend(topk_scores.cpu().flatten().tolist())
+                # Concatenate scores for current user and get top-k
+                user_scores = torch.cat(user_scores, dim=0)
+                topk_scores, topk_indices = torch.topk(user_scores, k, dim=0)
+                topk_items = item_indices[topk_indices]
+                
+                # Collect recommendations for current user
+                user_indices.extend([users[user_idx].item()] * k)
+                recommendations.extend(topk_items.cpu().tolist())
+                scores.extend(topk_scores.cpu().tolist())
 
         return {
             "user_indice": user_indices,

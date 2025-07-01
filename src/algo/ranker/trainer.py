@@ -97,7 +97,7 @@ class LitRanker(L.LightningModule):
         weights = torch.where(labels == 1, self.neg_to_pos_ratio, 1.0)
 
         loss_fn = self._get_loss_fn(weights)
-        loss = loss_fn(predictions, labels)
+        loss = nn.BCELoss()(predictions, labels)
 
         self.log(
             "train_loss",
@@ -124,10 +124,10 @@ class LitRanker(L.LightningModule):
             input_item_features,
             input_item_ids,
         ).view(labels.shape)
-        weights = torch.where(labels == 1, self.neg_to_pos_ratio, 1.0)
+        weights = torch.where(labels == 1.0, self.neg_to_pos_ratio, 1.0)
 
         loss_fn = self._get_loss_fn(weights)
-        loss = loss_fn(predictions, labels)
+        loss = nn.BCELoss()(predictions, labels)
 
         # Update AUROC with current batch predictions and labels
         self.val_roc_auc_metric.update(predictions, labels.int())
@@ -249,6 +249,8 @@ class LitRanker(L.LightningModule):
         ).assign(label=lambda df: df["labels"].gt(0).astype(int))
 
         self.eval_classification_df = eval_classification_df
+        
+        print(eval_classification_df)
 
         # Evidently
         target_col = "label"
@@ -353,7 +355,7 @@ class LitRanker(L.LightningModule):
             torch.tensor(self.all_items_features, device=self._get_device()),
             torch.tensor(self.all_items_indices, device=self._get_device()),
             k=top_K,
-            batch_size=4,
+            batch_size=128,
         )
 
         recommendations_df = pd.DataFrame(recommendations).pipe(
