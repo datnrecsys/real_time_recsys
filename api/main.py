@@ -466,7 +466,21 @@ async def retrieve_recommendations(
             item_id = hit.payload.get("parent_asin", "")
             if item_id not in items_to_exclude:
                 rec_item_ids.append(item_id)
-                rec_scores.append(hit.model_dump()["score"])
+                
+                # Re-asign score
+                ctx = RetrieveContext(
+                    item_sequences=[item_sequences],
+                    item_ids=[item_id]
+                )
+                
+                score = await call_seq_retriever(
+                    ctx, "predict"
+                )
+                
+                score = score["scores"][0]
+                
+                rec_scores.append(score)
+                # rec_scores.append(hit.model_dump()["score"])
                 
                 if len(rec_item_ids) >= count:
                     break

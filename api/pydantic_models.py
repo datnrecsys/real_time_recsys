@@ -131,5 +131,6 @@ class ItemSequenceInput(BaseModel):
     sequence_length: int = Field(10, description="Maximum length of the sequence to maintain")
 
 class RetrieveContext(BaseModel):
+    item_ids: Optional[List[str]] = None
     user_ids: Optional[List[str]] = None
     item_sequences: List[List[str]]
