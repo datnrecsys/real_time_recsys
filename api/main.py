@@ -4,7 +4,7 @@ import os
 import random
 import sys
 from typing import Any, Dict, List, Optional
-
+import numpy as np
 import httpx
 import redis
 from qdrant_client import AsyncQdrantClient
@@ -23,6 +23,7 @@ from .pydantic_models import (
     TitleSearchResponse,
     SearchItem,
     ItemSequenceInput,
+    RetrieveContext
 )
 
 from .utils import debug_logging_decorator
@@ -63,6 +64,8 @@ qdrant_client = AsyncQdrantClient(
 )
 
 QDRANT_ITEM_COLLECTION = "item2vec_item"
+
+seq_retriever_model_server_url = "http://138.2.61.6:30000"
 
 # Set the custom OpenAPI schema with examples
 app.openapi = lambda: custom_openapi(
@@ -345,7 +348,138 @@ async def push_new_item_sequence(
             error_message = f"[DEBUG] Unexpected error pushing data to feature store: {str(e)}"
             logger.error(error_message)
             raise HTTPException(status_code=500, detail="Internal server error")
+@app.post(
+    "/model_server/call",
+    summary="Call external sequence retriever model server",
+)
+async def call_seq_retriever(
+        ctx: RetrieveContext, endpoint: str
+    ):
+        user_ids = ctx.user_ids
+        item_seq = ctx.item_sequences
 
+        logger.debug(
+            f"Calling seq_rating_predicting with user_ids: {user_ids}, item_seq: {item_seq}"
+        )
+
+        # Prepare the payload for the external service
+        payload = {"input_data": ctx.model_dump()}
+
+        # Using json.dumps to format payload as json string so that later can extract from logs and rebuild the data easily
+        logger.debug(
+            f"[COLLECT] Payload prepared: <features>{json.dumps(payload)}</features>"
+        )
+
+        # Make the POST request to the external service
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{seq_retriever_model_server_url}/{endpoint}",
+                    json=payload,
+                    headers={
+                        "accept": "application/json",
+                        "Content-Type": "application/json",
+                    },
+                )
+
+            # Handle response
+            if response.status_code == 200:
+                logger.debug(
+                    f"[COLLECT] Response from external service: <result>{json.dumps(response.json())}</result>"
+                )
+                result = response.json()
+                return result
+            else:
+                error_message = (
+                    f"[DEBUG] External service returned an error: {response.text}"
+                )
+                logger.error(error_message)
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=error_message,
+                )
+
+        except httpx.HTTPError as e:
+            error_message = f"[DEBUG] Error connecting to external service: {str(e)}"
+            logger.error(error_message)
+            raise HTTPException(status_code=500, detail=error_message) from e
+
+@app.get(
+    "/recs/u2i/two_tower_retrieve",
+    summary="Get recommendations for users based on their item sequences",
+)
+@debug_logging_decorator
+async def retrieve_recommendations(
+    user_id: str = Query(..., description="ID of the user"),
+    count: Optional[int] = Query(10, description="Number of recommendations to return"),
+    debug: bool = Query(False, description="Enable debug logging"),
+) -> Dict[str, Any]:
+    """
+    Retrieve recommendations for a user based on their item sequences using a two-tower model.
+    """
+    logger.debug(f"Retrieving recommendations for user_id: {user_id} using two-tower model")
+
+    # Step 1: Fetch item sequences for the user
+    item_sequences = await feature_store_fetch_item_sequence(user_id)
+    item_sequences = item_sequences["item_sequence"]
+    items_to_exclude = set()
+    if not item_sequences or len(item_sequences) == 0:
+        logger.debug(f"No item sequences found for user_id: {user_id}. Falling back to popular recommendations.")
+        # Fallback to popular recommendations if no item sequences are found
+        popular_recs = await get_recommendations_popular(count, debug)
+        
+        result = {
+            "user_id": user_id,
+            "item_sequence": [],
+            "recommendations": popular_recs["recommendations"],
+        }
+    
+    else:
+        items_to_exclude.update(item_sequences)
+        
+        # Step 2: Get query embedding for the user's item sequences
+        ctx = RetrieveContext(
+            item_sequences=[item_sequences]
+        )
+        
+        query_embedding_result = await call_seq_retriever(
+            ctx, "get_query_embeddings"
+        )
+        
+        query_embedding =  np.array(query_embedding_result.get("query_embedding")[0])
+        logger.info(f"[DEBUG] {query_embedding.shape=}")
+        
+        buffer_count = count + len(items_to_exclude)
+        
+        hits = await qdrant_client.search(
+            collection_name="two_tower_sequence_item_embedding",
+            query_vector=query_embedding.tolist(),
+            limit=buffer_count,
+            with_payload=True,
+            with_vectors=False,  # We don't need vectors in the response
+        )
+        
+        rec_item_ids = []
+        rec_scores = []
+        for hit in hits:
+            # TODO: This knowledge of using parent_asin as item id should be clear to developers...
+            item_id = hit.payload.get("parent_asin", "")
+            if item_id not in items_to_exclude:
+                rec_item_ids.append(item_id)
+                rec_scores.append(hit.model_dump()["score"])
+                
+                if len(rec_item_ids) >= count:
+                    break
+        result = {
+            "user_id": user_id,
+            "item_sequence": item_sequences,
+            "recommendations": {
+                "rec_item_ids": rec_item_ids,
+                "rec_scores": rec_scores,
+            },
+        }
+    return result
+                
 # @app.get("/recs/u2i/rerank", summary="Get recommendations for users")
 # @debug_logging_decorator
 # async def get_recommendations_u2i_rerank(

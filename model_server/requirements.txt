@@ -1,4 +1,4 @@
---extra-index-url https://download.pytorch.org/whl/cu124
+--extra-index-url https://download.pytorch.org/whl/cpu
 
 a2wsgi==1.10.10 ; python_full_version == "3.11.9"
 accelerate==1.8.1 ; python_full_version == "3.11.9"
@@ -314,10 +314,10 @@ tomli-w==1.2.0 ; python_full_version == "3.11.9"
 tomli==2.2.1 ; python_full_version == "3.11.9"
 tomlkit==0.13.3 ; python_full_version == "3.11.9"
 toolz==1.0.0 ; python_full_version == "3.11.9"
-torch==2.6.0+cu124 ; python_full_version == "3.11.9"
-torchaudio==2.6.0+cu124 ; python_full_version == "3.11.9"
+torch==2.6.0 ; python_full_version == "3.11.9"
+torchaudio==2.6.0 ; python_full_version == "3.11.9"
 torchmetrics==1.7.3 ; python_full_version == "3.11.9"
-torchvision==0.21.0+cu124 ; python_full_version == "3.11.9"
+torchvision==0.21.0 ; python_full_version == "3.11.9"
 tornado==6.5.1 ; python_full_version == "3.11.9"
 tqdm==4.67.1 ; python_full_version == "3.11.9"
 traitlets==5.14.3 ; python_full_version == "3.11.9"
