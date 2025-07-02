@@ -82,6 +82,7 @@ app.add_middleware(
         "http://127.0.0.1:8000",
         "http://127.0.0.1:8002",
         "http://127.0.0.1:8001",  # Self
+        "http://138.2.61.6:8000"
     ],
     allow_credentials=True,
     allow_methods=["*"],

@@ -86,6 +86,9 @@ class RankingMetricComputer(Generic[T]):
         Returns:
             pd.DataFrame: A DataFrame with mapped user and item IDs and recommendation.
         """
+        
+        # print(rec_df)
+        # print(rec_df.groupby("user_indice").size())
             
         
         recommendation_df = rec_df.copy()
@@ -98,6 +101,8 @@ class RankingMetricComputer(Generic[T]):
                 )
             )
         )
+        
+        print(recommendation_df)
         
         # Assign user_id and item_id in order to process the next step 
         
@@ -119,7 +124,7 @@ class RankingMetricComputer(Generic[T]):
             }
             )
         
-        print(recommendation_df.head(10))
+        print(recommendation_df)
             
         return recommendation_df
     
@@ -308,6 +313,9 @@ class RankingMetricComputer(Generic[T]):
         Returns:
             pd.DataFrame: A DataFrame containing the recommendations.
         """
+        label_df = label_df.sort_values("timestamp", ascending=True).drop_duplicates(
+            subset=["user_indice"]
+        )
         input_data = self._build_input_data(label_df, device=device)
 
         rec_df = self._get_rec_df(input_data)

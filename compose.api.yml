@@ -18,6 +18,20 @@ services:
       - recsys
     restart: always
 
+  seq_retriever_model_server:
+    container_name: seq_retriever_model_server
+    build:
+      context: .
+      dockerfile: model_server/Dockerfile
+    ports:
+      - "30000:3000"
+    env_file:
+      - .env
+    environment:
+      - MLFLOW_TRACKING_URI=http://138.2.61.6:5002
+    entrypoint: ["bentoml", "serve", "sequence_service:TwoTowerService"]
+    # command: ["ls"]
+
 networks:
   recsys:
     external: true

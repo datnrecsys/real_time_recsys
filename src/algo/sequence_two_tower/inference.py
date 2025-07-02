@@ -40,7 +40,7 @@ class SequenceRatingPredictionInferenceWrapper(mlflow.pyfunc.PythonModel):
             # Ref: https://github.com/mlflow/mlflow/issues/11930
             model_input = model_input.to_dict(orient="records")[0]
 
-        user_indices = [self.idm.get_user_index(id_) for id_ in model_input['user_ids']]
+        # user_indices = [self.idm.get_user_index(id_) for id_ in model_input['user_ids']]
         item_indices = [self.idm.get_item_index(id_) for id_ in model_input["item_ids"]]
         item_sequences = []
         
@@ -55,7 +55,7 @@ class SequenceRatingPredictionInferenceWrapper(mlflow.pyfunc.PythonModel):
             )
             item_sequences.append(item_sequence)
 
-        infer_output = self.infer(user_indices, item_sequences, item_indices)
+        infer_output = self.infer(item_sequences, item_indices)
         infer_output = infer_output.tolist()
         
         return {
@@ -63,13 +63,11 @@ class SequenceRatingPredictionInferenceWrapper(mlflow.pyfunc.PythonModel):
             "scores": infer_output,
         }
         
-    def infer(self, user_indices, item_sequences, item_indices):
-        user_indices = torch.tensor(user_indices, device=self.device)
+    def infer(self, item_sequences, item_indices):
         item_sequences = torch.tensor(item_sequences, device=self.device)
         item_indices = torch.tensor(item_indices, device=self.device)
 
         input_data = SequenceModelRequest(
-            user_id=user_indices,
             item_sequence=item_sequences,
             target_item=item_indices,
             recommendation=False,
@@ -77,4 +75,4 @@ class SequenceRatingPredictionInferenceWrapper(mlflow.pyfunc.PythonModel):
         )
 
         output = self.model.predict(input_data)
-        return output.view(len(user_indices)).detach().cpu().numpy()
+        return output.view(len(item_indices)).detach().cpu().numpy()
