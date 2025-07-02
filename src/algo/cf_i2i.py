@@ -1,8 +1,9 @@
+from typing import Any, Dict, List, Optional, Union
+
 import numpy as np
+from loguru import logger
 from sklearn.metrics.pairwise import cosine_similarity
 from tqdm.auto import tqdm
-from loguru import logger
-from typing import Optional, Union,Dict, Any, List
 
 from src.utils.math_utils import sigmoid
 

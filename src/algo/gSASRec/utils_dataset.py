@@ -1,17 +1,18 @@
-import sys
 import copy
-import torch
-import os
-import random
-import numpy as np
-from collections import defaultdict
-from multiprocessing import Process, Queue
 import csv
 import itertools
-import pandas as pd
+import os
+import random
+import sys
+from collections import defaultdict
+from multiprocessing import Process, Queue
+
 import networkx as nx
+import numpy as np
+import pandas as pd
 import scipy.sparse as sp
-from torch.utils.data import Dataset, DataLoader
+import torch
+from torch.utils.data import DataLoader, Dataset
 
 
 def build_index(dataset_name):

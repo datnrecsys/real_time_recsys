@@ -1,7 +1,8 @@
 import json
 import os
-from slugify import slugify
+
 from kaggle.api.kaggle_api_extended import KaggleApi
+from slugify import slugify
 
 # 1. CẤU HÌNH THÔNG TIN UPLOAD
 USERNAME = "hodinhtrieu"  # Thay bằng username Kaggle của bạn

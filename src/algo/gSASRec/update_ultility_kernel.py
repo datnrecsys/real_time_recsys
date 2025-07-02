@@ -1,9 +1,10 @@
 import json
 import os
-import time
 import subprocess
-from slugify import slugify  # pip install python-slugify
+import time
+
 from kaggle.api.kaggle_api_extended import KaggleApi
+from slugify import slugify  # pip install python-slugify
 
 # Khởi tạo API
 api = KaggleApi()

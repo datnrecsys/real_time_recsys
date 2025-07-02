@@ -1,12 +1,17 @@
-from typing import Any, Dict
+from typing import Any, Dict, Optional, cast
 
 import torch
 import torch.nn as nn
-from tqdm.auto import tqdm
-from src.algo.sequence.dataset import UserItemBinaryRatingDFDataset
+from loguru import logger
 from torch.nn import functional as F
+from tqdm.auto import tqdm
 
-class SequenceRatingPrediction(nn.Module):
+from src.algo.base.base_dl_model import BaseDLModel
+from src.algo.sequence.dataset import UserItemBinaryRatingDFDataset
+from src.domain.model_request import SequenceModelRequest
+
+
+class SequenceRatingPrediction(BaseDLModel):
     """
     A PyTorch neural network model for predicting user-item interaction ratings based on sequences of previous items
     and a target item. This model uses user and item embeddings, and performs rating predictions using fully connected layers.
@@ -33,23 +38,33 @@ class SequenceRatingPrediction(nn.Module):
         num_users,
         num_items,
         embedding_dim,
-        item_embedding=None,
+        item_embedding: Optional[torch.nn.Embedding] = None,
         dropout=0.2,
+        use_user_embedding: bool = True,
+        use_start_token: bool = False,
     ):
         super().__init__()
 
         self.num_items = num_items
         self.num_users = num_users
 
-        # Item embedding (with padding index)
-        self.item_embedding = item_embedding or nn.Embedding(
-            num_items + 2,
-            embedding_dim,
-            padding_idx=num_items+1
-        )
-
-        # User embedding
-        self.user_embedding = nn.Embedding(num_users, embedding_dim)
+        # Item embedding (with padding index and <start> index)
+        if use_start_token:
+            self.item_embedding = nn.Embedding(
+                num_items + 2,
+                embedding_dim,
+                padding_idx=num_items+1
+            )
+        else:
+            self.item_embedding = nn.Embedding(
+                num_items + 1,
+                embedding_dim,
+                padding_idx=num_items
+            )
+        
+        if item_embedding:
+            self.item_embedding.weight.data[:-2] = item_embedding.weight.data if item_embedding.num_embeddings == num_items else item_embedding.weight.data[:-1]
+            
 
         # GRU layer to process item sequences
         # self.gru = nn.GRU(
@@ -74,12 +89,20 @@ class SequenceRatingPrediction(nn.Module):
 
         # self.gelu = nn.ReLU()
         self.prelu1 = nn.PReLU()
-        self.prelu2 = nn.PReLU()
+        # self.prelu2 = nn.PReLU()
         self.dropout = nn.Dropout(p=dropout)
         
-        self.final_fc = nn.Linear(embedding_dim * 2, embedding_dim)
-        self.final_fc2 = nn.Linear(embedding_dim, embedding_dim // 2)
-        self.score_fc = nn.Linear(embedding_dim // 2, 1)
+        if use_user_embedding:
+            # User embedding
+            self.user_embedding = nn.Embedding(num_users, embedding_dim)
+            self.final_fc = nn.Linear(embedding_dim * 3, embedding_dim)
+        else:
+            self.final_fc = nn.Linear(embedding_dim * 2, embedding_dim)
+        # self.final_fc2 = nn.Linear(embedding_dim, embedding_dim // 2)
+        self.score_fc = nn.Linear(embedding_dim, 1)
+        
+        self._use_user_embedding = use_user_embedding
+        self._use_start_token = use_start_token
 
         # Fully connected layers for rating prediction
         # self.query_fc = nn.Sequential(
@@ -96,9 +119,11 @@ class SequenceRatingPrediction(nn.Module):
         #     # self.gelu,
             
         # )
+        logger.info(f"Start token used: {self._get_item_start_token_idx}"
+                    f", Padding token used: {self._get_item_padding_token_idx}")
         
 
-    def forward(self, user_ids, input_seq, target_item):
+    def forward(self, input_data: SequenceModelRequest)-> torch.Tensor:
         """
         Forward pass to predict the rating.
 
@@ -110,19 +135,25 @@ class SequenceRatingPrediction(nn.Module):
         Returns:
             torch.Tensor: Predicted rating for each user-item pair.
         """
-        
+        if input_data.recommendation:
+            raise ValueError(
+                "Please set recommendation to False when calling forward method."
+            )
+        user_ids = input_data.user_id
+        input_seq = input_data.item_sequence
+        target_item = input_data.target_item
+
         # Replace -1 in input_seq and target_item with num_items (padding_idx)
-        padding_idx_tensor = torch.tensor(self.item_embedding.padding_idx)
-        input_seq = torch.where(input_seq == -1, padding_idx_tensor, input_seq)
-        target_item = torch.where(target_item == -1, padding_idx_tensor, target_item)
+        input_seq = self._replace_negative_one_with_padding_idx(input_seq)
+        target_item = self._replace_negative_one_with_padding_idx(target_item)
 
-        input_seq = F.pad(input_seq, (0, 1), mode='constant', value=padding_idx_tensor - 1)
+        # Pad start token at the beginning of the sequence
+        if self._use_start_token:
+            input_seq = F.pad(input_seq, (0, 1), mode='constant', value=self._get_item_start_token_idx)
+        # print("input seq: ", input_seq)
 
-
-        # print(input_seq.shape) #(batch_size, seq_len)
-        # print('hehe')
-        mask = (input_seq == padding_idx_tensor).float()
-        # print(mask)
+        mask = (input_seq == self._get_item_padding_token_idx).float()
+        # print("mask: ", mask)
         # print(mask.shape) #(batch_size, seq_len)
 
         # Embed input sequence
@@ -164,16 +195,23 @@ class SequenceRatingPrediction(nn.Module):
         # score = torch.sum(
         #     query_embedding * candidate_embedding, dim=-1
         # )
+        
+        if self._use_user_embedding:
+            embedded_user = self._get_user_tower(user_ids)  # Shape: [batch_size, embedding_dim]
+        else:
+            embedded_user = torch.tensor([], device = self.item_embedding.weight.device)
+        
         final_embedding = torch.cat(
-            (hidden_state, embedded_target), dim=-1
-        )   # Shape: [batch_size, embedding_dim * 2]
+            (hidden_state, embedded_target, embedded_user), dim=-1
+        )   # Shape: [batch_size, embedding_dim * 3]
+        # print("final embedding: ", final_embedding.shape)
         
         
         final_embedding = self.final_fc(final_embedding) # Shape: [batch_size, embedding_dim]
         final_embedding = self.prelu1(final_embedding)   # Shape: [batch_size, embedding_dim//2]
         
-        final_embedding = self.final_fc2(final_embedding) # Shape: [batch_size, embedding_dim//2]
-        final_embedding = self.prelu2(final_embedding)   # Shape: [batch_size, embedding_dim//2]
+        # final_embedding = self.final_fc2(final_embedding) # Shape: [batch_size, embedding_dim//2]
+        # final_embedding = self.prelu2(final_embedding)   # Shape: [batch_size, embedding_dim//2]
         
         
         # Apply sigmoid activation to the output
@@ -182,27 +220,53 @@ class SequenceRatingPrediction(nn.Module):
         #     torch.cat((combined_embedding, embedded_target), dim=1)
         # )
         output_ratings = self.score_fc(final_embedding) 
+
+        output_ratings = cast(torch.tensor, output_ratings)
+        # print("output ratings: ", output_ratings)
         output_ratings = output_ratings.masked_fill(torch.isnan(output_ratings), 0)
         # print(output_ratings) # Shape: [batch_size, 1]
         return output_ratings  # Shape: [batch_size]
-
-    def predict(self, user, item_sequence, target_item):
+    
+    def _replace_negative_one_with_padding_idx(self, tensor: torch.Tensor) -> torch.Tensor:
+        # Replace -1 in input_seq and target_item with num_items (padding_idx)
+        padding_idx_tensor = torch.tensor(self.item_embedding.padding_idx)
+        new_tensor = torch.where(tensor == -1, padding_idx_tensor, tensor)
+        
+        return new_tensor
+    
+    @property
+    def _get_item_start_token_idx(self) -> int:
         """
-        Predict the rating for a specific user and item sequence using the forward method
-        and applying a Sigmoid function to the output.
-
-        Args:
-            user (torch.Tensor): User ID.
-            item_sequence (torch.Tensor): Sequence of previously interacted items.
-            target_item (torch.Tensor): The target item to predict the rating for.
+        Get the ID of the start token used in the item embedding.
 
         Returns:
-            torch.Tensor: Predicted rating after applying Sigmoid activation.
+            int: The ID of the start token.
         """
-        output_rating = self.forward(user, item_sequence, target_item)
-        # Apply sigmoid activation to the output
-        output_rating = nn.Sigmoid()(output_rating)
-        return output_rating
+        return self.item_embedding.num_embeddings - 2
+    
+    @property
+    def _get_item_padding_token_idx(self) -> int:
+        """
+        Get the ID of the padding token used in the item embedding.
+
+        Returns:
+            int: The ID of the padding token.
+        """
+        assert self.item_embedding.padding_idx == self.item_embedding.num_embeddings - 1, "Padding index should be the last index in the item embedding."
+        return self.item_embedding.padding_idx
+    
+    def _get_user_tower(self, user_idx: torch.Tensor) -> torch.Tensor:
+        """
+        Get the user tower output for a given user.
+
+        Args:
+            user (torch.Tensor): User indices. # (batch_size,)
+
+        Returns:
+            torch.Tensor: User tower output.
+        """
+        user_emb = self.user_embedding(user_idx)
+        return user_emb
 
     @classmethod
     def get_default_dataset(cls):
@@ -213,11 +277,11 @@ class SequenceRatingPrediction(nn.Module):
             UserItemRatingDFDataset: The expected dataset type.
         """
         return UserItemBinaryRatingDFDataset
+    
 
     def recommend(
         self,
-        users: torch.Tensor,
-        item_sequences: torch.Tensor,
+        input_data: SequenceModelRequest,
         k: int,
         batch_size: int = 128,
     ) -> Dict[str, Any]:
@@ -228,7 +292,7 @@ class SequenceRatingPrediction(nn.Module):
             users (torch.Tensor): Tensor containing user IDs.
             item_sequences (torch.Tensor): Tensor containing sequences of previously interacted items.
             k (int): Number of recommendations to generate for each user.
-            batch_size (int, optional): Batch size for processing users. Defaults to 128.
+            batch_size (int, optional): Batch size for processing user-item pairs. Defaults to 128.
 
         Returns:
             Dict[str, Any]: Dictionary containing recommended items and scores:
@@ -236,50 +300,56 @@ class SequenceRatingPrediction(nn.Module):
                 'recommendation': List of recommended item indices.
                 'score': List of predicted interaction scores.
         """
+        users = input_data.user_id
+        item_sequences = input_data.item_sequence
+        
         self.eval()
         all_items = torch.arange(
             self.item_embedding.num_embeddings, device=users.device
         )
 
-        user_indices = []
-        recommendations = []
-        scores = []
+        # Create all user-item pairs
+        user_batch_expanded = users.unsqueeze(1).expand(-1, len(all_items)).reshape(-1)
+        items_batch = all_items.unsqueeze(0).expand(len(users), -1).reshape(-1)
+        item_sequences_batch = item_sequences.unsqueeze(1).repeat(1, len(all_items), 1)
+        item_sequences_batch = item_sequences_batch.view(-1, item_sequences.size(-1))
+
+        all_scores = []
 
         with torch.no_grad():
-            total_users = users.size(0)
+            total_pairs = len(user_batch_expanded)
             for i in tqdm(
-                range(0, total_users, batch_size), desc="Generating recommendations"
+                range(0, total_pairs, batch_size), desc="Generating recommendations"
             ):
-                user_batch = users[i : i + batch_size]
-                item_sequence_batch = item_sequences[i : i + batch_size]
-
-                # Expand user_batch to match all items
-                user_batch_expanded = (
-                    user_batch.unsqueeze(1).expand(-1, len(all_items)).reshape(-1)
-                )
-                items_batch = (
-                    all_items.unsqueeze(0).expand(len(user_batch), -1).reshape(-1)
-                )
-                item_sequences_batch = item_sequence_batch.unsqueeze(1).repeat(
-                    1, len(all_items), 1
-                )
-                item_sequences_batch = item_sequences_batch.view(
-                    -1, item_sequence_batch.size(-1)
+                end_idx = min(i + batch_size, total_pairs)
+                
+                batch_users = user_batch_expanded[i:end_idx]
+                batch_items = items_batch[i:end_idx]
+                batch_sequences = item_sequences_batch[i:end_idx]
+                
+                input_data_batch = SequenceModelRequest(
+                    user_id=batch_users,
+                    item_sequence=batch_sequences,
+                    target_item=batch_items,
+                    recommendation=False
                 )
 
                 # Predict scores for the batch
-                batch_scores = self.predict(
-                    user_batch_expanded, item_sequences_batch, items_batch
-                ).view(len(user_batch), -1)
+                batch_scores = self.predict(input_data_batch)
+                all_scores.append(batch_scores)
 
-                # Get top k items for each user in the batch
-                topk_scores, topk_indices = torch.topk(batch_scores, k, dim=1)
-                topk_items = all_items[topk_indices]
+        # Concatenate all scores and reshape
+        all_scores = torch.cat(all_scores, dim=0)
+        all_scores = all_scores.view(len(users), len(all_items))
 
-                # Collect recommendations
-                user_indices.extend(user_batch.repeat_interleave(k).cpu().tolist())
-                recommendations.extend(topk_items.cpu().flatten().tolist())
-                scores.extend(topk_scores.cpu().flatten().tolist())
+        # Get top k items for each user
+        topk_scores, topk_indices = torch.topk(all_scores, k, dim=1)
+        topk_items = all_items[topk_indices]
+
+        # Collect recommendations
+        user_indices = users.repeat_interleave(k).cpu().tolist()
+        recommendations = topk_items.cpu().flatten().tolist()
+        scores = topk_scores.cpu().flatten().tolist()
 
         return {
             "user_indice": user_indices,

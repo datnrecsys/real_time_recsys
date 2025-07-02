@@ -1,7 +1,9 @@
 import importlib
+
 import matplotlib.pyplot as plt
 
 from src.algo.gSASRec.config import gSASRecExperimentConfig
+
 
 def load_config(config_file: str) -> gSASRecExperimentConfig:
     spec = importlib.util.spec_from_file_location("config", config_file)

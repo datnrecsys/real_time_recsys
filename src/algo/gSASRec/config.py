@@ -1,5 +1,6 @@
 import torch
 
+
 class gSASRecExperimentConfig():
     """
     Configuration class for gSASRecExperiment.

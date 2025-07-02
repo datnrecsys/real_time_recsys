@@ -1,26 +1,15 @@
+from typing import cast
+
 import lightning as L
 import torch
-import pandas as pd
-import os
 import torch.nn as nn
-from evidently.pipeline.column_mapping import ColumnMapping
-from evidently.report import Report
-from evidently.metric_preset import ClassificationPreset
+from pydantic import BaseModel
+from torchmetrics import AUROC, AveragePrecision
 
 from src.algo.sequence.model import SequenceRatingPrediction
-from src.eval.log_metrics import log_ranking_metrics, log_classification_metrics
-from src.eval.utils import merge_recs_with_target, create_rec_df, create_label_df
-from evidently.metrics import (
-    NDCGKMetric,
-    RecallTopKMetric,
-    PrecisionTopKMetric,
-    FBetaTopKMetric,
-    PersonalizationMetric,
-)
-from torchmetrics import AUROC, AveragePrecision
-from pydantic import BaseModel
-from loguru import logger
-import numpy as np
+from src.domain.model_request import SequenceModelRequest
+from src.eval.recommendation import RankingMetricComputer
+
 
 class SeqModellingLitModule(L.LightningModule):
     def __init__(
@@ -37,6 +26,7 @@ class SeqModellingLitModule(L.LightningModule):
         top_K: int = 100,
         top_k: int = 10,
         accelerator: str = "cpu",
+        negative_samples: int = 1,
 
     ):
         super().__init__()
@@ -54,6 +44,7 @@ class SeqModellingLitModule(L.LightningModule):
         self.accelerator = accelerator
         self.val_roc_auc_metric = AUROC(task="binary")
         self.val_pr_auc_metric = AveragePrecision(task="binary")
+        self.negative_samples = negative_samples
 
     def training_step(self, batch, batch_idx):
         if not isinstance(self.trainer.train_dataloader.dataset, self.model.get_default_dataset()):
@@ -63,11 +54,16 @@ class SeqModellingLitModule(L.LightningModule):
         
         input_user_ids = batch["user"]
         input_item_ids = batch["item"]
-        input_item_sequences = batch["item_sequence"]
+        input_item_sequences = batch["item_sequence"].int()
 
         labels = batch["rating"].float()
-        
-        predictions = self.model.forward(input_user_ids, input_item_sequences, input_item_ids).view(labels.shape)
+
+        predictions = self.model.forward(SequenceModelRequest(
+            user_id=input_user_ids,
+            item_sequence=input_item_sequences,
+            target_item=input_item_ids,
+            recommendation=False
+        )).view(labels.shape)
         # print(predictions)
 
         loss_fn = self._get_loss_fn()
@@ -90,9 +86,15 @@ class SeqModellingLitModule(L.LightningModule):
         input_item_sequences = batch["item_sequence"].int()
         
 
-        labels = batch["rating"].float()
+        labels = cast(torch.Tensor, batch["rating"].float())
 
-        predictions = self.model.forward(input_user_ids, input_item_sequences, input_item_ids).view(labels.shape)
+        predictions = self.model.forward(SequenceModelRequest(
+            user_id=input_user_ids,
+            item_sequence=input_item_sequences,
+            target_item=input_item_ids,
+            recommendation=False
+        )).view(labels.shape)
+        
         predictions = nn.Sigmoid()(predictions)
         loss_fn = nn.BCELoss()
         loss = loss_fn(predictions, labels)
@@ -182,274 +184,75 @@ class SeqModellingLitModule(L.LightningModule):
         self.val_roc_auc_metric.reset()
         self.val_pr_auc_metric.reset()
 
-    # def on_fit_end(self):
-    #     self.model = self.model.to(self._get_device())
-    #     logger.info(f"Logging classification metrics...")
-    #     self._log_classification_metrics()
-        
-    #     logger.info(f"Logging ranking metrics...")
-    #     self._log_ranking_metrics()
-
-    #     logger.info(f"Evidently metrics are available at: {os.path.abspath(self.log_dir)}")
-
-
-    def _log_classification_metrics(
-        self,
-    ):
-        # Need to call model.eval() here to disable dropout and batchnorm at prediction
-        # Else the model output score would be severely affected
-        self.model.eval()
-
-        val_loader = self.trainer.val_dataloaders
-
-        labels = []
-        classifications = []
-
-        for _, batch_input in enumerate(val_loader):
-            _input_user_ids = batch_input["user"].to(self._get_device())
-            _input_item_ids = batch_input["item"].to(self._get_device())
-            _input_item_seq_ids = batch_input["item_sequence"].int().to(self._get_device())
-            _labels = batch_input["rating"].to(self._get_device())
-            _classifications = self.model.predict(
-                _input_user_ids, _input_item_seq_ids, _input_item_ids
-            ).view(_labels.shape)
-
-            labels.extend(_labels.cpu().detach().numpy())
-            classifications.extend(_classifications.cpu().detach().numpy())
-
-        eval_classification_df = pd.DataFrame(
-            {
-                "labels": labels,
-                "classification_proba": classifications,
-            }
-        ).assign(label=lambda df: df["labels"].gt(0).astype(int))
-
-        self.eval_classification_df = eval_classification_df
-
-        # Evidently
-        target_col = "label"
-        prediction_col = "classification_proba"
-        column_mapping = ColumnMapping(target=target_col, prediction=prediction_col)
-        classification_performance_report = Report(
-            metrics=[
-                ClassificationPreset(probas_threshold=0.731),
-            ]
-        )
-
-        classification_performance_report.run(
-            reference_data=None,
-            current_data=eval_classification_df[[target_col, prediction_col]],
-            column_mapping=column_mapping,
-        )
-
-        evidently_report_fp = f"{self.log_dir}/evidently_report_classification.html"
-        os.makedirs(self.log_dir, exist_ok=True)
-        classification_performance_report.save_html(evidently_report_fp)
-
-        if "mlflow" in str(self.logger.__class__).lower():
-            run_id = self.logger.run_id
-            mlf_client = self.logger.experiment
-            mlf_client.log_artifact(run_id, evidently_report_fp)
-            for metric_result in classification_performance_report.as_dict()["metrics"]:
-                metric = metric_result["metric"]
-                if metric == "ClassificationQualityMetric":
-                    roc_auc = float(metric_result["result"]["current"]["roc_auc"])
-                    mlf_client.log_metric(run_id, f"val_roc_auc", roc_auc)
-                    continue
-                if metric == "ClassificationPRTable":
-                    columns = [
-                        "top_perc",
-                        "count",
-                        "prob",
-                        "tp",
-                        "fp",
-                        "precision",
-                        "recall",
-                    ]
-                    table = metric_result["result"]["current"][1]
-                    table_df = pd.DataFrame(table, columns=columns)
-                    for i, row in table_df.iterrows():
-                        prob = int(row["prob"] * 100)  # MLflow step only takes int
-                        precision = float(row["precision"])
-                        recall = float(row["recall"])
-                        mlf_client.log_metric(
-                            run_id,
-                            f"val_precision_at_prob_as_threshold_step",
-                            precision,
-                            step=prob,
-                        )
-                        mlf_client.log_metric(
-                            run_id,
-                            f"val_recall_at_prob_as_threshold_step",
-                            recall,
-                            step=prob,
-                        )
-                    break
-    
-    def _log_ranking_metrics(self):
-        self.model.eval()
-
-        timestamp_col = self.timestamp_col
-        rating_col = self.rating_col
-        user_col = "user_indice"
-        item_col = "item_indice"
-        top_K = self.top_K
-        top_k = self.top_k
-        idm = self.idm
-
-        val_df = self.trainer.val_dataloaders.dataset.df
-
-        # Prepare input dataframe for prediction where user_indice is unique and item_sequence contains the last interaction in training data
-        # Retain the first row of each user and use that as input for recommendations
-        # We would compare that predictions with all the items this customer rates in val set
-        to_rec_df = val_df.sort_values(timestamp_col, ascending=True).drop_duplicates(
-            subset=["user_indice"]
-        )
-
-        recommendations = self.model.recommend(
-            torch.tensor(to_rec_df["user_indice"].values, device=self._get_device()),
-            torch.tensor(np.stack(to_rec_df["item_sequence"].values).astype(np.int32), device=self._get_device()).int(),
-            k=top_K,
-            batch_size=4,
-        )
-        # print(f"Recommendations: {recommendations}")
-
-        recommendations_df = pd.DataFrame(recommendations).pipe(
-            create_rec_df, idm
-        ).rename(
-            columns={
-                "recommendation": item_col,
-            }
-        )
-        # print(f"Recommendations_df: {recommendations_df}")
-
-        label_df = create_label_df(
-            val_df,
-            user_col=user_col,
-            item_col=item_col,
-            rating_col=rating_col,
-            timestamp_col=timestamp_col,
-        )
-
-        # print("Label_df: ", label_df)
-
-        eval_df = merge_recs_with_target(
-            recommendations_df,
-            label_df,
-            k=top_K,
-            user_col=user_col,
-            item_col=item_col,
-            rating_col=rating_col,
-        )
-
-        # print("Eval_df: ", eval_df)
-
-        self.eval_ranking_df = eval_df
-
-        column_mapping = ColumnMapping(
-            recommendations_type="rank",
-            target=rating_col,
-            prediction="rec_ranking",
-            item_id=item_col,
-            user_id=user_col,
-        )
-
-        report = Report(
-            metrics=[
-                NDCGKMetric(k=top_k),
-                RecallTopKMetric(k=top_K),
-                PrecisionTopKMetric(k=top_K),
-                FBetaTopKMetric(k=top_k),
-                PersonalizationMetric(k=top_k),
-            ],
-        )
-
-        report.run(
-            reference_data=None, current_data=eval_df, column_mapping=column_mapping
-        )
-
-        evidently_report_fp = f"{self.log_dir}/evidently_report_ranking.html"
-        os.makedirs(self.log_dir, exist_ok=True)
-        report.save_html(evidently_report_fp)
-        # print(report.as_dict())
-
-        if "mlflow" in str(self.logger.__class__).lower():
-            run_id = self.logger.run_id
-            mlf_client = self.logger.experiment
-            mlf_client.log_artifact(run_id, evidently_report_fp)
-            for metric_result in report.as_dict()["metrics"]:
-                metric = metric_result["metric"]
-                if metric == "PersonalizationMetric":
-                    metric_value = float(metric_result["result"]["current_value"])
-                    mlf_client.log_metric(run_id, f"val_{metric}", metric_value)
-                    continue
-                result = metric_result["result"]["current"].to_dict()
-                for kth, metric_value in result.items():
-                    mlf_client.log_metric(
-                        run_id, f"val_{metric}_at_k_as_step", metric_value, step=kth
-                    )
-
 
     def _get_loss_fn(self):
         """
         Get the default loss function for the model.
         """
         #https://pytorch.org/docs/stable/generated/torch.nn.MSELoss.html
-        return nn.BCEWithLogitsLoss(pos_weight= torch.tensor(1.0, device=self._get_device()))
+        return nn.BCEWithLogitsLoss(pos_weight= torch.tensor(self.negative_samples, device=self._get_device()))
 
-    # def _get_loss_fn(self):
-    #     """
-    #     Get the default loss function for the model.
-    #     """
-    #     # Use WeightedMSELoss with pos_weight=4 and neg_weight=1
-    #     return WeightedMSELoss(pos_weight=2, neg_weight=1.25)
-    
     def _get_device(self):
         return self.accelerator
     
-    
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-
-class FocalBCELoss(nn.Module):
-    def __init__(self, alpha=1, gamma=0.5, reduction='mean'):
+    # def test_step(self, batch, batch_idx):
+    #     """
+    #     Test step for the model.
+    #     """
+    #     val_df = self.trainer.test_dataloaders.dataset.df
+        
+        
+    #     val_recs_df = val_df.sort_values(by=self.timestamp_col).drop_duplicates(subset=[self.user_col], keep="first")
+        
+    #     item_rec = RankingMetricComputer(
+    #         self.model,
+    #         mlf_client=self.logger.experiment,
+    #         batch_size=1024,
+    #         evidently_report_fp = f"{self.log_dir}",
+    #     )
+    #     try: 
+    #         run_id = self.logger.run_id
+    #     except Exception :
+    #         run_id = None
+            
+    #     report = item_rec.calculate(
+    #         val_recs_df,
+    #         run_id=run_id,
+    #         log_to_mlflow=True,
+    #         device=self._get_device()
+    #     )
+        
+    #     return report 
+        
+    # def on_fit_end(self):
+    def _log_ranking_report(self):
         """
-        alpha: weight for positive class (y=1)
-        gamma: focusing parameter >= 0
-        reduction: 'none' | 'mean' | 'sum'
+        Log the ranking report to MLflow.
         """
-        super().__init__()
-        self.alpha = alpha
-        self.gamma = gamma
-        self.reduction = reduction
+        model = self.model.eval()
+        val_df = self.trainer.val_dataloaders.dataset.df
+        print(val_df)
 
-    def forward(self, logits, targets):
-        """
-        logits: Tensor of shape (N, …), raw model outputs (no sigmoid)
-        targets: Tensor of same shape, with 0/1 labels
-        """
-        # BCE with logits: computes -[y*log σ(x) + (1-y)*log(1-σ(x))]
-        bce_loss = F.binary_cross_entropy_with_logits(
-            logits, targets, reduction='none'
-        )  # shape (N, …)
+        val_recs_df = val_df.sort_values(by=self.timestamp_col).drop_duplicates(subset=["user_indice"], keep="first")
 
-        # Convert logits to probabilities
-        probs = torch.sigmoid(logits)
-        # p_t: for y=1 use p, for y=0 use 1-p
-        p_t = probs * targets + (1 - probs) * (1 - targets)
-
-        # α_t: for y=1 use α, for y=0 use 1-α
-        alpha_t = self.alpha * targets + (1 - self.alpha) * (1 - targets)
-
-        # Focal weight: (1 - p_t)^γ
-        focal_weight = (1 - p_t).pow(self.gamma)
-
-        loss = alpha_t * focal_weight * bce_loss
-
-        if self.reduction == 'mean':
-            return loss.mean()
-        elif self.reduction == 'sum':
-            return loss.sum()
-        else:  # 'none'
-            return loss
+        item_rec = RankingMetricComputer(
+            model,
+            mlf_client=self.logger.experiment,
+            batch_size=1,
+            evidently_report_fp = f"{self.log_dir}",
+        )
+        
+        try: 
+            run_id = self.logger.run_id
+        except Exception :
+            run_id = None
+            
+        report = item_rec.calculate(
+            val_recs_df,
+            run_id=run_id,
+            log_to_mlflow=True,
+            device=self._get_device()
+        )
+        
+        return report
+        

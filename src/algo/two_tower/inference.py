@@ -1,7 +1,9 @@
+import numpy
+import torch
+
 import mlflow
 from src.utils.embedding_id_mapper import IDMapper
-import torch
-import numpy 
+
 
 class TwoTowerInferenceWrapper(mlflow.pyfunc.PythonModel):
     """

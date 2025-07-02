@@ -2,6 +2,7 @@ import pandas as pd
 
 from src.utils.embedding_id_mapper import IDMapper
 
+
 def create_rec_df(df, 
                   idm: IDMapper,
                   user_col: str = "user_id",

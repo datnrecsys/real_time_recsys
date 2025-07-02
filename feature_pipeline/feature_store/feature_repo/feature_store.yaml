@@ -1,0 +1,27 @@
+project: real_time_recsys
+provider: local
+registry:
+    registry_type: sql
+    # Need to use postgresql+psycopg2 otherwise using postgresql+psycopg would break since we're using SQLAlchemy < 2 which is required by Airflow client 2.10.2
+    path: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
+    cache_ttl_seconds: 60
+    sqlalchemy_config_kwargs:
+        echo: false
+        pool_pre_ping: true
+online_store:
+    type: postgres
+    host: ${POSTGRES_HOST}
+    port: ${POSTGRES_PORT}
+    database: ${POSTGRES_DB}
+    db_schema: ${POSTGRES_FEATURE_STORE_ONLINE_SCHEMA}
+    user: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
+offline_store:
+    type: postgres
+    host: ${POSTGRES_HOST}
+    port: ${POSTGRES_PORT}
+    database: ${POSTGRES_DB}
+    db_schema: ${POSTGRES_FEATURE_STORE_OFFLINE_SCHEMA}
+    user: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
+entity_key_serialization_version: 2
