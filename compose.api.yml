@@ -17,6 +17,8 @@ services:
     networks:
       - recsys
     restart: always
+    networks:
+      - recsys
 
   seq_retriever_model_server:
     container_name: seq_retriever_model_server
@@ -32,6 +34,9 @@ services:
     entrypoint: ["bentoml", "serve", "sequence_service:TwoTowerService"]
     # command: ["ls"]
 
+    restart: always
+    networks:
+      - recsys
 networks:
   recsys:
     external: true
