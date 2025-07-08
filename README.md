@@ -60,10 +60,28 @@
     EOF'
     ```
 
+7. Materialize features
+    ```sh
+    poetry run feast apply
+    export MATERIALIZE_CHECKPOINT_TIME=$(poetry run python ../../../scripts/check_oltp_max_timestamp.py 2>&1 | awk -F'<ts>|</ts>' '{print $2}')
+    export MATERIALIZE_CHECKPOINT_TIME=$(echo "$MATERIALIZE_CHECKPOINT_TIME" | xargs)
 
-poetry run feast apply
-export MATERIALIZE_CHECKPOINT_TIME=$(poetry run python ../../../scripts/check_oltp_max_timestamp.py 2>&1 | awk -F'<ts>|</ts>' '{print $2}')
-export MATERIALIZE_CHECKPOINT_TIME=$(echo "$MATERIALIZE_CHECKPOINT_TIME" | xargs)
+    poetry run feast materialize-incremental 1900-01-01T00:00:00
+    poetry run feast materialize-incremental "$MATERIALIZE_CHECKPOINT_TIME"
+    ```
 
-poetry run feast materialize-incremental 1900-01-01T00:00:00
-poetry run feast materialize-incremental "$MATERIALIZE_CHECKPOINT_TIME"
+# Extra
+
+## Useful commands
+- Show all running containers with their names, images, and networks
+    ```sh
+    printf "%-12s %-15s %-25s %s\n" "CONTAINER" "NAME" "IMAGE" "NETWORKS"
+
+    # for each running container
+    docker ps -q | while read -r id; do
+    name=$(docker inspect --format='{{.Name}}' $id | cut -c2-)     # strip leading slash
+    image=$(docker inspect --format='{{.Config.Image}}' $id)
+    nets=$(docker inspect --format='{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}' $id)
+    printf "%-12s %-15s %-25s %s\n" "${id:0:12}" "$name" "$image" "$nets"
+    done
+    ```

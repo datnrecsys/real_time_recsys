@@ -148,6 +148,8 @@ services:
     working_dir: /app/feature_pipeline/feature_store/feature_repo
     entrypoint: ["poetry", "run", "feast", "serve", "--port", "${FEAST_ONLINE_SERVER_PORT:-6566}", "--host", "0.0.0.0"]
     restart: always
+    networks:
+      - recsys
 
   feature_offline_server:
     container_name: feature_offline_server
@@ -163,6 +165,8 @@ services:
     working_dir: /app/feature_pipeline/feature_store/feature_repo
     entrypoint: ["poetry", "run", "feast", "serve_offline", "--port", "${FEAST_OFFLINE_SERVER_PORT:-8815}", "--host", "0.0.0.0"]
     restart: always
+    networks:
+      - recsys
 
   feature_store_ui:
     container_name: feature_store_ui
@@ -178,6 +182,8 @@ services:
     working_dir: /app/feature_pipeline/feature_store/feature_repo
     entrypoint: ["poetry", "run", "feast", "ui", "--port", "${FEAST_UI_PORT:-8887}", "--host", "0.0.0.0"]
     restart: always
+    networks:
+      - recsys
 
 
 networks:
